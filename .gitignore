@@ -1,0 +1,9 @@
+.*
+data/
+result/
+build/
+**/*.egg-info/
+**/__pycache__/
+*.ipynb
+*.png
+!.gitignore

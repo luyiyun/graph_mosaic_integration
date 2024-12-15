@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools", "cython", "setuptools-scm"]  # 如果使用setup.py并且其中需要运行的包，都需要放在这里
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gmi"
+authors = [
+  {name = "Rong Zhiwei", email = "18845728185@163.com"},
+  {name = "Yu Yipei", email = "rongzhiwei@bjmu.edu.cn"},
+]
+description = "A deep generative model that addresses mosaic integration challenges."
+keywords = ["bioinformatics", "deep-learning", "single-cell", "moaic-integration"]
+license = {file = "LICENSE"}
+requires-python = ">=3.10"
+readme = "readme.md"
+dependencies = [
+  "numpy>=2.0.0",
+  "pandas",
+  "scipy",
+  "torch",
+  "scikit-learn",
+  "anndata",
+  "mudata",
+  "tqdm",
+  "matplotlib",
+  "scanpy",
+  "h5py",
+  "tables",
+]
+dynamic = ["version"]
+[project.optional-dependencies]
+develop = [
+    "ipdb",
+    "pytest",
+    "seaborn",
+    "scib",
+]
+
+
+[tool.setuptools.packages]
+find = {where = ["src"], namespaces = true}  # namespaces=false will prevent any folder without an __init__.py file
+
+[tool.setuptools_scm]
+# can be empty if no extra settings are needed, presence enables setuptools_scm
