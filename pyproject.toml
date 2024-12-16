@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "gmi"
 authors = [
   {name = "Rong Zhiwei", email = "18845728185@163.com"},
-  {name = "Yu Yipei", email = "rongzhiwei@bjmu.edu.cn"},
+  {name = "Yu Yipei", email = "yuhuilz@163.com"},
 ]
 description = "A deep generative model that addresses mosaic integration challenges."
 keywords = ["bioinformatics", "deep-learning", "single-cell", "moaic-integration"]
