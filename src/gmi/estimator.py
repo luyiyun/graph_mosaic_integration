@@ -36,7 +36,7 @@ class GraphMosaicIntegration:
     disc_bn: bool = True
     add_batch_embedding: bool = False
     learning_rate: float = 0.01
-    num_neg_per_pos: int = 5
+    num_neg_per_pos: int = 4
     num_epochs: int = 100
     batch_size: int = 131072
     val_split: float = 0.2  # 验证集比例
@@ -49,8 +49,8 @@ class GraphMosaicIntegration:
         "divide"
     )
     disc_node_num_per_batch: int = 200
-    label_smoothing: float = 0.0
-    alpha: float = 0.2
+    label_smoothing: float = 0.1
+    alpha: float = 0.1
     loss_alpha: float = 0.2
     neg_sampling_mode: Literal["full", "matched", "bipartitle"] = "matched"
     loss_type: Literal["margin_ranking, weighted_softmax"] = "weighted_softmax"
@@ -102,6 +102,7 @@ class GraphMosaicIntegration:
         )
         group = pd.Categorical(group)
         group_categories, group_code = group.categories, group.codes
+
         # transfer group to int
         nodes_df = pd.DataFrame(
             {
@@ -192,7 +193,6 @@ class GraphMosaicIntegration:
             )
         else:
             feat_edges_df, feat_edges_group = None, None
-
         return MosaicDataGraph(
             n_nodes=nodes_df.shape[0],
             n_edges=nodes_df.shape[0],
