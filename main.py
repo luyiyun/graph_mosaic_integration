@@ -3,12 +3,6 @@ import json
 from datetime import datetime
 from dataclasses import asdict
 
-# import os
-# import torch
-# import seaborn as sns
-# import numpy as np
-# import pandas as pd
-# import scanpy as sc
 import mudata as mu
 import pandas as pd
 from gmi import GraphMosaicIntegration,run_benchmark, data_infor_integrate,plot_umap
