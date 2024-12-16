@@ -1,4 +1,5 @@
 from datetime import datetime
+from dataclasses import asdict
 
 # import os
 # import torch
@@ -33,9 +34,14 @@ from gmi import GraphMosaicIntegration
 
 mdata = mu.read("./data/pbmc.h5mu")
 mdata.obs["batch"] = mdata.mod["protein"].obs["batch"].loc[mdata.obs_names]
-gmi_model = GraphMosaicIntegration()
+gmi_model = GraphMosaicIntegration(num_epochs=2)
 gmi_model.fit(mdata, batch_key="batch", feature_interaction_key="net")
-gmi_model.save(f"./result/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}")
+print(gmi_model.embeddings)
+save_path = f"./result/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
+gmi_model.save(save_path)
+
+new_model = GraphMosaicIntegration.load(save_path)
+print(new_model.embeddings)
 
 # graph = GraphMosaicIntegration.mdata2graph(
 #     mdata, batch_key="batch", feature_interaction_key="net"
