@@ -1,5 +1,7 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from typing import Literal
+import os.path as osp
+import json
 
 import mudata as mu
 import pandas as pd
@@ -246,6 +248,30 @@ class GraphMosaicIntegration:
 
     def save(self, path: str):
         self.trainer.save(path)
+        args = asdict(self)
+        with open(osp.join(path, "args.json"), "w") as f:
+            json.dump(args, f)
+
+    @classmethod
+    def load(cls, path: str):
+        with open(osp.join(path, "args.json"), "r") as f:
+            args = json.load(f)
+        estimator = cls(**args)
+        # TODO: model无法恢复
+        # TODO: Trainer中的optimize, lr_scheduler(虽然现在还没有实现)等还需要恢复？
+        # estimator.model.load_state_dict(
+        #     torch.load(
+        #         osp.join(path, "model.pth"), map_location=estimator.device
+        #     )
+        # )
+        return estimator
 
     def plot_losses(self, fn: str):
         self.trainer.plot_losses(fn)
+
+    @property
+    def embeddings(self):
+        if hasattr(self, "model"):
+            return self.model.node_embedding.weight.detach()
+
+        raise ValueError("Model is not fitted yet!")

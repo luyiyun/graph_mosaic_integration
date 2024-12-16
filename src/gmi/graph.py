@@ -81,4 +81,3 @@ class MosaicDataGraph:
             feat_edges_df=feat_edges_df,
             feat_edge_groups=feat_edge_groups,
         )
-
