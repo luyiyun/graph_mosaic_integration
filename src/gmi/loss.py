@@ -1,73 +1,104 @@
+from typing import Literal
+
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 
 
+def softmax_weighted_loss(
+    pos_score: torch.Tensor,
+    neg_scores: torch.Tensor,
+    edge_weights: torch.Tensor | None = None,
+) -> torch.Tensor:
+    if edge_weights is None:
+        raise ValueError(
+            "edge_weights must be provided for 'weighted_softmax' loss."
+        )
 
-class LossType(nn.Module):
-    def __init__(self, loss_type="margin_ranking", margin=1.0):
-        super(LossType, self).__init__()
-        self.loss_type = loss_type
-        self.margin = margin
+    # 合并正样本分数和负样本分数
+    all_scores = torch.cat([pos_score.unsqueeze(1), neg_scores], dim=1)
 
-    def softmax_weighted_loss(self, pos_score, neg_scores, edge_weights=None):
-        if edge_weights is None:
-            raise ValueError(
-                "edge_weights must be provided for 'weighted_softmax' loss."
-            )
+    # 计算分母 sum(exp(s_{e'}))
+    denominator = torch.logsumexp(all_scores, dim=1)
 
-        # 合并正样本分数和负样本分数
-        all_scores = torch.cat([pos_score.unsqueeze(1), neg_scores], dim=1)
+    # 计算 softmax 损失
+    softmax_loss = denominator - pos_score
 
-        # 计算分母 sum(exp(s_{e'}))
-        denominator = torch.logsumexp(all_scores, dim=1)
+    # 加权
+    if edge_weights is not None:
+        softmax_loss = edge_weights * softmax_loss
 
-        # 计算 softmax 损失
-        softmax_loss = denominator - pos_score
-
-        # 加权
-        if edge_weights is not None:
-            softmax_loss = edge_weights * softmax_loss
-
-        return softmax_loss.mean()
-
-    def margin_ranking_loss(self, pos_scores, neg_scores):
-
-        loss_fn = nn.MarginRankingLoss(margin=self.margin)
-        pos_scores_expanded = pos_scores.unsqueeze(1).expand_as(neg_scores)
-        labels = torch.ones_like(neg_scores)
-        return loss_fn(pos_scores_expanded, neg_scores, labels)
-
-    def forward(self, pos_scores, neg_scores, edge_weights=None):
-        if self.loss_type == "margin_ranking":
-            return self.margin_ranking_loss(pos_scores, neg_scores)
-        elif self.loss_type == "weighted_softmax":
-            return self.softmax_weighted_loss(pos_scores, neg_scores, edge_weights)
-        else:
-            raise ValueError(f"Unsupported loss_type: {self.loss_type}")
+    return softmax_loss.mean()
 
 
-def compute_loss(pos_scores, neg_scores, pos_domain_preds=None, domain_labels=None, edge_weights=None, loss_fn=None,loss_alpha=0.2,label_smoothing=0.0) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
-    if loss_fn is None:
-        raise ValueError("loss_fn must be provided.")
-    # 边的损失
-    if loss_fn.loss_type == "weighted_softmax":
-        edge_loss = loss_fn(pos_scores, neg_scores, edge_weights)
+def margin_ranking_loss(
+    pos_scores: torch.Tensor, neg_scores: torch.Tensor, margin: float = 1.0
+) -> torch.Tensor:
+    pos_scores_expanded = pos_scores.unsqueeze(1).expand_as(neg_scores)
+    return F.margin_ranking_loss(
+        pos_scores_expanded, neg_scores, torch.ones_like(neg_scores), margin
+    )
+
+
+def domain_classification_loss(
+    domain_preds: torch.Tensor,
+    domain_labels: torch.Tensor,
+    label_smoothing: float = 0.0,
+    weights: torch.Tensor | None = None,
+) -> torch.Tensor:
+    if weights is None:
+        return F.cross_entropy(
+            domain_preds, domain_labels, label_smoothing=label_smoothing
+        )
+
+    loss = F.cross_entropy(
+        domain_preds,
+        domain_labels,
+        label_smoothing=label_smoothing,
+        reduction="none",
+    )
+    loss = (loss * weights).sum() / weights.sum()
+    return loss
+
+
+def graph_mosaic_integration_loss(
+    pos_scores: torch.Tensor,
+    neg_scores: torch.Tensor,
+    edge_weights: torch.Tensor | None = None,
+    domain_preds: torch.Tensor | None = None,
+    domain_labels: torch.Tensor | None = None,
+    discriminate_weights: torch.Tensor | None = None,
+    edge_loss_type: Literal[
+        "weighted_softmax", "margin_ranking"
+    ] = "weighted_softmax",
+    loss_alpha: float = 0.2,
+    label_smoothing: float = 0.0,
+) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+    if edge_loss_type == "weighted_softmax":
+        edge_loss = softmax_weighted_loss(pos_scores, neg_scores, edge_weights)
+    elif edge_loss_type == "margin_ranking":
+        edge_loss = margin_ranking_loss(pos_scores, neg_scores)
     else:
-        edge_loss = loss_fn(pos_scores, neg_scores)
+        raise ValueError(f"Unsupported edge loss type: {edge_loss_type}")
 
-    domain_loss = None
-    if pos_domain_preds is None and domain_labels is None:
-        # 如果两个都为 None，只使用边的损失
-        total_loss = edge_loss
-    elif pos_domain_preds is None  or domain_labels is None:
-        # 如果其中一个是 None，但剩下的不是，抛出错误
-        raise ValueError("You need to provide all of pos_domain_preds, neg_domain_preds, and domain_labels at the same time.")
-    else:
+    total_loss = edge_loss
+    if domain_preds is not None and domain_labels is not None:
+        domain_loss = domain_classification_loss(
+            domain_preds, domain_labels, label_smoothing, discriminate_weights
+        )
+        total_loss += loss_alpha * domain_loss
 
-        domain_loss = F.cross_entropy(pos_domain_preds, domain_labels,label_smoothing=label_smoothing)#smooth
-        # 总损失是边的损失和领域分类损失之和
-        total_loss = edge_loss + loss_alpha *domain_loss
+        return total_loss, {
+            "edge": edge_loss,
+            "domain": domain_loss,
+            "total": total_loss,
+        }
+    elif domain_preds is not None or domain_labels is not None:
+        raise ValueError(
+            "Both domain_preds and domain_labels "
+            "must be provided for domain classification."
+        )
 
-
-    return total_loss, {"edge": edge_loss, "domain": domain_loss, "total": total_loss}
+    return total_loss, {
+        "edge": edge_loss,
+        "total": total_loss,
+    }

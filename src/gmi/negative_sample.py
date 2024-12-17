@@ -1,6 +1,10 @@
 from typing import Literal
+from logging import getLogger
 
 import torch
+
+
+logger = getLogger(__name__)
 
 
 class NegativeSampler:
@@ -132,6 +136,10 @@ class NegativeSampler:
             valid_neg_samples = torch.stack([src_n[mask], dst_n[mask]], dim=1)
             collected_neg_samples.append(valid_neg_samples)
             num_all_neg_samples += valid_neg_samples.shape[0]
+            logger.info(
+                f"Generated {num_all_neg_samples}/{n_neg_sample} "
+                "valid neg samples"
+            )
 
         return torch.cat(collected_neg_samples, dim=0)[:n_neg_sample].reshape(
             -1, self.num_neg_per_pos, 2
@@ -170,28 +178,27 @@ class NegativeSampler:
         """
         visible 负采样模式。
         """
-        if self.neg_sampling_restrict is None:
-            raise ValueError(
-                "neg_sampling_restrict must be provided when neg_sampling_mode is 'visible'"
-            )
-        collected_neg_samples = []
-        for bi, fi in self.neg_sampling_restrict:
-            import ipdb; ipdb.set_trace()
-            src_candidates = self.nodes[self.nodes[:, 0] == bi][
-                :, 1
-            ]  # type为 batch_type 的 idx
-            dst_candidates = self.nodes[self.nodes[:, 0] == fi][
-                :, 1
-            ]  # type为 feature_type 的 idx
-            neg_samples_i = self.negative_sample_by_candicate_indices(
-                src_candidates, dst_candidates
-            )
-            neg_samples_i = neg_samples_i[
-                : self.total_neg_samples // len(self.neg_sampling_restrict)
-            ]
-            collected_neg_samples.append(neg_samples_i)
-        neg_samples = torch.cat(collected_neg_samples, dim=0)
-        return neg_samples.reshape(-1, self.num_neg_per_pos, 2)
+        pass
+        # if self.neg_sampling_restrict is None:
+        #     raise ValueError(
+        #         "neg_sampling_restrict must be provided "
+        #         "when neg_sampling_mode is 'visible'"
+        #     )
+        # logger.info(f"neg_sampling_restrict: {self.neg_sampling_restrict}")
+        # collected_neg_samples = []
+        # for bi, fi in self.neg_sampling_restrict:
+        #     logger.info(f"Restricting to batch {bi} and feature {fi}")
+        #     src_candidates = self.nodes[self.nodes[:, 0] == bi][:, 1]
+        #     dst_candidates = self.nodes[self.nodes[:, 0] == fi][:, 1]
+        #     neg_samples_i = self.negative_sample_by_candicate_indices(
+        #         src_candidates, dst_candidates
+        #     )
+        #     neg_samples_i = neg_samples_i[
+        #         : self.total_neg_samples // len(self.neg_sampling_restrict)
+        #     ]
+        #     collected_neg_samples.append(neg_samples_i)
+        # neg_samples = torch.cat(collected_neg_samples, dim=0)
+        # return neg_samples.reshape(-1, self.num_neg_per_pos, 2)
 
     def negative_sampling_matched(
         self,
@@ -207,25 +214,24 @@ class NegativeSampler:
             dtype=torch.long,
             device=pos_edges_idx.device,
         )
+        logger.info(f"neg_sampling_restrict: {self.neg_sampling_restrict}")
 
         for bi, fi in self.neg_sampling_restrict:
+            logger.info(f"Restricting to batch {bi} and feature {fi}")
             matches = (src_group == bi) & (dst_group == fi)
             count = matches.sum().item()
+            logger.info(f"Found {count} edges for restriction {bi}-{fi}")
             if count <= 0:
                 # 如果没有出现相关组合的edges，则跳过
+                logger.info(f"No edges found for restriction {bi}-{fi}")
                 continue
 
             src_candidates = torch.nonzero(self.node_group == bi)[:, 0]
             dst_candidates = torch.nonzero(self.node_group == fi)[:, 0]
-            # src_candidates = self.nodes[self.nodes[:, 0] == bi][
-            #     :, 1
-            # ]  # type为 batch_type 的 idx
-            # dst_candidates = self.nodes[self.nodes[:, 0] == fi][
-            #     :, 1
-            # ]  # type为 feature_type 的 idx
             if len(src_candidates) == 0 or len(dst_candidates) == 0:
                 raise ValueError(
-                    f"No candidates found for batch type {bi} or feature type {fi}"
+                    "No candidates found for batch "
+                    f"type {bi} or feature type {fi}"
                 )
 
             # TODO: 理清思路

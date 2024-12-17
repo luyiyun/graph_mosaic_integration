@@ -194,8 +194,8 @@ class GraphMosaicIntegration:
         else:
             feat_edges_df, feat_edges_group = None, None
         return MosaicDataGraph(
-            n_nodes=nodes_df.shape[0],
-            n_edges=nodes_df.shape[0],
+            # n_nodes=nodes_df.shape[0],
+            # n_edges=nodes_df.shape[0],
             n_cells=mdata.shape[0],
             n_feats=mdata.shape[1],
             n_batch=mdata.obs[batch_key].unique().shape[0],
@@ -203,7 +203,7 @@ class GraphMosaicIntegration:
             nodes_df=nodes_df,
             main_edges_df=main_edges_df,
             feat_edges_df=feat_edges_df,
-            edge_groups=main_edges_group,
+            main_edge_groups=main_edges_group,
             feat_edge_groups=feat_edges_group,
         )
 
