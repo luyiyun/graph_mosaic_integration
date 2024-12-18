@@ -373,6 +373,10 @@ class Trainer:
         )
         embed_df.to_csv(embedding_path)
 
+        pd.DataFrame(self.all_losses).to_csv(
+            os.path.join(result_dir, "all_losses.csv")
+        )
+
     def plot_losses(self, fn: str):
         fig, ax = plt.subplots(figsize=(8, 6))
         for k, v in self.all_losses.items():
