@@ -6,7 +6,7 @@ import mudata as mu
 import pandas as pd
 from scib_metrics.benchmark import Benchmarker, BioConservation
 import matplotlib.pyplot as plt
-from harmony import harmonize
+# from harmony import harmonize
 #优化一下复制输入部分
 import anndata as ad
 
@@ -158,7 +158,7 @@ def run_benchmark(mdata,num_cell, result_dir):
     )
     bm.benchmark()
     bm.plot_results_table(min_max_scale=False, save_dir=f"{result_dir}")
-    
+
     # 打印详细的结果数据框
     df = bm.get_results(min_max_scale=False)
     df_transposed = df.transpose()

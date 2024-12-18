@@ -151,7 +151,7 @@ class Trainer:
 
         self._evaluator = Evaluator()
         self._loss_accumulator = LossAccumulator()
-        self._flag_use_early_stop = (patience < inf and patience < np.inf)
+        self._flag_use_early_stop = patience < inf and patience < np.inf
         if self._flag_use_early_stop:
             self._early_stopper = EarlyStopper(patience=patience)
 
@@ -187,7 +187,9 @@ class Trainer:
                 domain_labels=batch["label"]
                 if self.adversarial_training
                 else None,
-                discriminate_weights=batch["weight"],
+                discriminate_weights=batch["weight"]
+                if self.adversarial_training
+                else None,
                 edge_loss_type=self.loss_type,
                 loss_alpha=loss_alpha,
                 label_smoothing=self.label_smoothing,
@@ -322,7 +324,11 @@ class Trainer:
                             for k, v in train_losses.items()
                         )
                     )
-                    + f", Domain classifer acc: {self._evaluator.cal():.4f}"
+                    + (
+                        f", Domain classifer acc: {self._evaluator.cal():.4f}"
+                        if self.adversarial_training
+                        else ""
+                    )
                 )
                 # 验证阶段
                 if val_split is not None:

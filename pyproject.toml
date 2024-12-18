@@ -33,7 +33,8 @@ develop = [
     "ipdb",
     "pytest",
     "seaborn",
-    "scib",
+    "scib_metrics",
+    # "harmony-py"
 ]
 
 

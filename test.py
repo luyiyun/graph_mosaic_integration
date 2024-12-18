@@ -41,10 +41,11 @@ gmi_model = GraphMosaicIntegration(
     alpha=alpha,
     loss_alpha=loss_alpha,
     neg_sampling_mode=neg_sampling_mode,
+    adversarial_training=False,
     neg_sample_in_batch=False,
     val_split=None,
     patience=np.inf,
-    num_epochs=60,
+    num_epochs=50,
 )
 gmi_model.fit(mdata, batch_key="batch", feature_interaction_key="net")
 gmi_model.save(result_path)
