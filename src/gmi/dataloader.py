@@ -310,10 +310,13 @@ class GraphDataset:
 
     def __iter__(self):
         if not self.node_discriminate:
+            self.edge_dataset.init()
             for i in range(len(self.edge_dataset)):
                 yield self.edge_dataset[i]
         else:  # 因为上面是yield，必须加else
             if self.node_batching_method in ["divide", "random"]:
+                self.edge_dataset.init()
+                self.node_dataset.init()
                 for i in range(len(self.edge_dataset)):
                     edge_batch = self.edge_dataset[i]
                     node_batch = self.node_dataset[i]
@@ -321,6 +324,7 @@ class GraphDataset:
                     yield edge_batch
 
             if self.node_batching_method == "unique":
+                self.edge_dataset.init()
                 for i in range(len(self.edge_dataset)):
                     edge_batch = self.edge_dataset[i]
                     node_batch = self.node_dataset.batch_from_edges(
