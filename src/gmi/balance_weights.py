@@ -1,4 +1,5 @@
 import logging
+from typing import Literal
 
 import numpy as np
 import pandas as pd
@@ -17,7 +18,10 @@ def estimate_balance_weights_glue(
     resolution: float = 1.0,
     cutoff: float = 0.5,
     power: float = 4.0,
+    cum_operator: Literal["sum", "prod"] = "prod",
 ):
+    assert cum_operator in ["sum", "prod"], "Invalid cum_operator!"
+
     logger.info("Clustering cells...")
     us, ns, leiden_labels, masks = [], [], [], []
     for bi in np.unique(batch):
@@ -47,7 +51,7 @@ def estimate_balance_weights_glue(
             ui.append(embed_mean_ci)
         ui = np.stack(ui, axis=0)
         ni = np.array(ni)
-        ui = normalize(ui, norm="l2")
+        ui = normalize(ui, norm="l2")  # 保证后续计算的是cosine
         us.append(ui)
         ns.append(ni)
 
@@ -65,9 +69,14 @@ def estimate_balance_weights_glue(
                 for k in range(len(us))
             )  # To align axes
             cosines.append(cosine[key])
-    joint_cosine = 1.0
-    for cosine in cosines:
-        joint_cosine = joint_cosine * cosine
+    if cum_operator == "sum":
+        joint_cosine = 0.0
+        for cosine in cosines:
+            joint_cosine = joint_cosine + cosine
+    elif cum_operator == "prod":
+        joint_cosine = 1.0
+        for cosine in cosines:
+            joint_cosine = joint_cosine * cosine
     logger.info(f"Matching array shape = {joint_cosine.shape}...")
 
     logger.info("Estimating balancing weight...")

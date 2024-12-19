@@ -4,15 +4,15 @@ import logging
 
 import mudata as mu
 import scanpy as sc
-import numpy as np
 import seaborn as sns
 from gmi import GraphMosaicIntegration
 
 
 logging.basicConfig(
-    level=logging.WARNING,
     format="[%(name)s][%(asctime)s][%(levelname)s] %(message)s",
 )
+logger = logging.getLogger("gmi.balance_weights")
+logger.setLevel(logging.INFO)
 
 
 mdata = mu.read("./data/pbmc.h5mu")
@@ -31,29 +31,27 @@ mdata.obs["cluster"] = (
 result_path = f"./result/{datetime.now().strftime('%Y-%m-%d_%H-%M')}"
 
 # 设定参数
-label_smoothing = 0
-alpha = 0.05
-loss_alpha = 0.05
-neg_sampling_mode = "matched"
-
 gmi_model = GraphMosaicIntegration(
-    label_smoothing=label_smoothing,
-    alpha=alpha,
-    loss_alpha=loss_alpha,
-    neg_sampling_mode=neg_sampling_mode,
-    adversarial_training=False,
-    neg_sample_in_batch=False,
+    label_smoothing=0.1,
+    alpha=1,
+    loss_alpha=1,
+    adversarial_training=True,
     val_split=None,
-    patience=np.inf,
-    num_epochs=50,
+    patience=5,
+    num_epochs=60,
+    late_join_alpha=0,
+    late_join_loss_alpha=0,
+    device="cuda:0",
+    adversartial_balance_weights=True,
+    num_epochs_with_balanced_weights=20,
 )
 gmi_model.fit(mdata, batch_key="batch", feature_interaction_key="net")
 gmi_model.save(result_path)
-weights = gmi_model.trainer.estimate_balance_weights()
-mdata.obs["weights"] = weights
+# weights = gmi_model.trainer.estimate_balance_weights()
+mdata.obs["weights"] = gmi_model.graph.nodes_adversarial_weights
 mdata.obsm["gmi"] = gmi_model.embeddings[: mdata.n_obs].detach().cpu().numpy()
 
-fg = sns.displot(weights, kde=True, rug=True)
+fg = sns.displot(mdata.obs["weights"], kde=True, rug=True)
 fg.savefig(osp.join(result_path, "weights_dist.png"))
 
 sc.pp.neighbors(mdata, use_rep="gmi")

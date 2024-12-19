@@ -1,8 +1,10 @@
 from dataclasses import dataclass, asdict
 from typing import Literal
+import os
 import os.path as osp
 import json
 
+import torch
 import mudata as mu
 import pandas as pd
 import numpy as np
@@ -48,6 +50,8 @@ class GraphMosaicIntegration:
     adversarial_batching_method: Literal["unique", "divide", "random"] = (
         "divide"
     )
+    adversartial_balance_weights: bool = False
+    num_epochs_with_balanced_weights: int = 50
     disc_node_num_per_batch: int = 200
     label_smoothing: float = 0.1
     alpha: float = 0.1
@@ -57,6 +61,7 @@ class GraphMosaicIntegration:
     late_join_loss_alpha: int = 5
     late_join_alpha: int = 5
     patience: int | float = 5  # inf or np.inf表示不使用早停
+    random_seed: int = 0
 
     def fit(
         self,
@@ -69,13 +74,13 @@ class GraphMosaicIntegration:
         if result_key is not None:
             raise NotImplementedError("result_key is not supported yet!")
 
-        graph = self.mdata2graph(
+        self.graph = self.mdata2graph(
             mdata,
             batch_key=batch_key,
             log_norm=log_norm,
             feature_interaction_key=feature_interaction_key,
         )
-        self.fit_graph(graph)
+        self.fit_graph(self.graph)
 
     @classmethod
     def mdata2graph(
@@ -237,6 +242,7 @@ class GraphMosaicIntegration:
             late_join_alpha=self.late_join_alpha,
             late_join_loss_alpha=self.late_join_loss_alpha,
             patience=self.patience,
+            random_seed=self.random_seed,
         )
 
         self.trainer.train(
@@ -246,8 +252,59 @@ class GraphMosaicIntegration:
             val_split=self.val_split,
         )
 
+        if not self.adversartial_balance_weights:
+            return
+
+        # 训练 adversarial_training 后，再训练一次，使用平衡的权重
+        print("Estimate balance weights...")
+        balanced_weights = self.trainer.estimate_balance_weights()
+        graph.nodes_adversarial_weights = balanced_weights
+        # 重新构建新的训练流程
+        print("Retrain with balanced weights...")
+        self.trainer_balanced = Trainer(
+            model=self.model,
+            device=self.device,
+            optimizer=self.optimizer,
+            lr=self.learning_rate * 0.1,
+            neg_sample_in_batch=self.neg_sample_in_batch,
+            adversarial_training=self.adversarial_training,
+            adversarial_batching_method=self.adversarial_batching_method,
+            adversarial_with_feature_nodes=False,
+            batch_size=self.batch_size,
+            disc_node_num_per_batch=self.disc_node_num_per_batch,
+            label_smoothing=self.label_smoothing,
+            alpha=self.alpha,
+            loss_alpha=self.loss_alpha,
+            neg_sampling_mode=self.neg_sampling_mode,
+            loss_type=self.loss_type,
+            late_join_alpha=0,
+            late_join_loss_alpha=0,
+            patience=self.patience,
+            random_seed=self.random_seed,
+        )
+        self.trainer_balanced.train(
+            graph=graph,
+            num_neg_per_pos=self.num_neg_per_pos,
+            num_epochs=self.num_epochs_with_balanced_weights,
+            val_split=self.val_split,
+        )
+
     def save(self, path: str):
-        self.trainer.save(path)
+        os.makedirs(path, exist_ok=True)
+
+        model_path = os.path.join(path, "model.pth")
+        torch.save(self.model.state_dict(), model_path)
+
+        embed_df = pd.DataFrame(
+            self.model.node_embedding.weight.detach().cpu().numpy(),
+            index=self.graph.nodes_df.index,
+        )
+        embed_df.to_csv(osp.join(path, "final_embeddings.csv"))
+
+        pd.DataFrame(self.trainer.all_losses).to_csv(
+            os.path.join(path, "all_losses.csv")
+        )
+
         args = asdict(self)
         with open(osp.join(path, "args.json"), "w") as f:
             json.dump(args, f)

@@ -1,11 +1,9 @@
 from typing import Literal
 from math import inf
 from copy import deepcopy
-import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
@@ -114,6 +112,7 @@ class Trainer:
         late_join_loss_alpha: int | None = None,
         late_join_alpha: int | None = None,
         patience: int | float = 5,  # inf or np.inf表示不使用早停
+        random_seed: int | None = None,
     ):
         self.device = torch.device(device)
         self.neg_sample_in_batch = neg_sample_in_batch
@@ -128,6 +127,7 @@ class Trainer:
         self.neg_sampling_mode = neg_sampling_mode
         self.late_join_loss_alpha = late_join_loss_alpha
         self.late_join_alpha = late_join_alpha
+        self.random_seed = random_seed
 
         if adversarial_with_feature_nodes:
             raise NotImplementedError(
@@ -270,7 +270,9 @@ class Trainer:
             )
         else:
             train_indices, valid_indices = train_test_split(
-                np.arange(graph.n_edges), test_size=val_split
+                np.arange(graph.n_edges),
+                test_size=val_split,
+                random_state=self.random_seed,
             )
             train_dataset = GraphDataset(
                 subset=train_indices,
@@ -350,32 +352,8 @@ class Trainer:
                     break
 
         self.all_losses: dict[str, list[float]] = self._loss_accumulator.all
-        self.all_losses["eval_loss"] = eval_losses
-
-    def save(self, result_dir: str):
-        os.makedirs(result_dir, exist_ok=True)
-        # 保存模型和嵌入
-        model_path = os.path.join(result_dir, "model.pth")
-        torch.save(self.model.state_dict(), model_path)
-
-        if self.graph.feat_edges_df is not None:
-            embedding_path = os.path.join(
-                result_dir,
-                f"final_embeddings_{self.neg_sampling_mode}_add_feat.csv",
-            )
-        else:
-            embedding_path = os.path.join(
-                result_dir, f"final_embeddings_{self.neg_sampling_mode}.csv"
-            )
-        embed_df = pd.DataFrame(
-            self.model.node_embedding.weight.detach().cpu().numpy(),
-            index=self.graph.nodes_df.index,
-        )
-        embed_df.to_csv(embedding_path)
-
-        pd.DataFrame(self.all_losses).to_csv(
-            os.path.join(result_dir, "all_losses.csv")
-        )
+        if val_split is not None:
+            self.all_losses["eval_loss"] = eval_losses
 
     def plot_losses(self, fn: str):
         fig, ax = plt.subplots(figsize=(8, 6))
