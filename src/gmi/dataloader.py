@@ -178,12 +178,12 @@ class NodesDataset:
     def init(self):
         if self.batching_method in ["divide", "random"] and self.shuffle:
             self._indice = torch.randperm(self._n_nodes, device=self.device)
-            self._nodes_group = self._nodes_group[self._indice]
-            self._node_adv_weights = (
-                self._node_adv_weights[self._indice]
-                if self._node_adv_weights is not None
-                else None
-            )
+            # self._nodes_group = self._nodes_group[self._indice]
+            # self._node_adv_weights = (
+            #     self._node_adv_weights[self._indice]
+            #     if self._node_adv_weights is not None
+            #     else None
+            # )
 
     def __len__(self) -> int:
         if self.batching_method == "divide":
@@ -210,9 +210,9 @@ class NodesDataset:
                 if self.shuffle
                 else torch.arange(start, end, device=self.device)
             )
-            batch_domain_label = self._nodes_group[start:end]
+            batch_domain_label = self._nodes_group[batch_domain_input]
             batch_adv_weights = (
-                self._node_adv_weights[start:end]
+                self._node_adv_weights[batch_domain_input]
                 if self._node_adv_weights is not None
                 else None
             )

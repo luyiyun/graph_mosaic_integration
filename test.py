@@ -32,24 +32,32 @@ result_path = f"./result/{datetime.now().strftime('%Y-%m-%d_%H-%M')}"
 
 # 设定参数
 gmi_model = GraphMosaicIntegration(
-    label_smoothing=0.1,
+    label_smoothing=0.0,
     alpha=1,
     loss_alpha=1,
     adversarial_training=True,
-    val_split=None,
+    val_split=0.1,
     patience=5,
-    num_epochs=60,
+    num_epochs=100,
     late_join_alpha=0,
     late_join_loss_alpha=0,
     device="cuda:0",
-    adversartial_balance_weights=True,
+    adversartial_balance_weights=False,
     num_epochs_with_balanced_weights=20,
+    learning_rate=0.002,
 )
 gmi_model.fit(mdata, batch_key="batch", feature_interaction_key="net")
 gmi_model.save(result_path)
-# weights = gmi_model.trainer.estimate_balance_weights()
-mdata.obs["weights"] = gmi_model.graph.nodes_adversarial_weights
-mdata.obsm["gmi"] = gmi_model.embeddings[: mdata.n_obs].detach().cpu().numpy()
+gmi_model.plot_losses(osp.join(result_path, "losses.png"))
+
+if gmi_model.adversartial_balance_weights:
+    mdata.obs["weights"] = gmi_model.graph.nodes_adversarial_weights
+else:
+    mdata.obs["weights"] = gmi_model.trainer.estimate_balance_weights()
+
+mdata.obsm["gmi"] = (
+    gmi_model.embeddings[: mdata.n_obs].detach().cpu().numpy()
+)
 
 fg = sns.displot(mdata.obs["weights"], kde=True, rug=True)
 fg.savefig(osp.join(result_path, "weights_dist.png"))
