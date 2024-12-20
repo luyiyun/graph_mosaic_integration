@@ -72,7 +72,13 @@ def graph_mosaic_integration_loss(
     ] = "weighted_softmax",
     loss_alpha: float = 0.2,
     label_smoothing: float = 0.0,
+    std_loss_alpha: float = 0.0,
 ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+    if std_loss_alpha > 0.0:
+        raise NotImplementedError(
+            "Standard loss is not implemented for graph mosaic integration."
+        )
+
     if edge_loss_type == "weighted_softmax":
         edge_loss = softmax_weighted_loss(pos_scores, neg_scores, edge_weights)
     elif edge_loss_type == "margin_ranking":
@@ -81,24 +87,18 @@ def graph_mosaic_integration_loss(
         raise ValueError(f"Unsupported edge loss type: {edge_loss_type}")
 
     total_loss = edge_loss
+    loss_dict = {"edge": edge_loss}
     if domain_preds is not None and domain_labels is not None:
         domain_loss = domain_classification_loss(
             domain_preds, domain_labels, label_smoothing, discriminate_weights
         )
         total_loss += loss_alpha * domain_loss
-
-        return total_loss, {
-            "edge": edge_loss,
-            "domain": domain_loss,
-            "total": total_loss,
-        }
+        loss_dict["domain"] = domain_loss
     elif domain_preds is not None or domain_labels is not None:
         raise ValueError(
             "Both domain_preds and domain_labels "
             "must be provided for domain classification."
         )
 
-    return total_loss, {
-        "edge": edge_loss,
-        "total": total_loss,
-    }
+    loss_dict["total"] = total_loss
+    return total_loss, loss_dict

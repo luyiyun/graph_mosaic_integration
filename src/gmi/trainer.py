@@ -113,6 +113,7 @@ class Trainer:
         late_join_alpha: int | None = None,
         patience: int | float = 5,  # inf or np.inf表示不使用早停
         random_seed: int | None = None,
+        std_loss_alpha: float = 0.0,
     ):
         self.device = torch.device(device)
         self.neg_sample_in_batch = neg_sample_in_batch
@@ -128,6 +129,7 @@ class Trainer:
         self.late_join_loss_alpha = late_join_loss_alpha
         self.late_join_alpha = late_join_alpha
         self.random_seed = random_seed
+        self.std_loss_alpha = std_loss_alpha
 
         if adversarial_with_feature_nodes:
             raise NotImplementedError(
@@ -172,7 +174,6 @@ class Trainer:
                 else None,
                 node_batch_indice=batch["node_groups"],
                 alpha=alpha,
-                num_cells=self.graph.n_cells,
             )
             # 计算当前批次的损失
             loss, loss_dict = graph_mosaic_integration_loss(
@@ -193,6 +194,7 @@ class Trainer:
                 edge_loss_type=self.loss_type,
                 loss_alpha=loss_alpha,
                 label_smoothing=self.label_smoothing,
+                std_loss_alpha=self.std_loss_alpha,
             )
 
             # 反向传播与优化
@@ -218,7 +220,6 @@ class Trainer:
                     batch["pos_edges"],
                     batch["neg_edges"],
                     node_batch_indice=batch["node_groups"],
-                    num_cells=self.graph.n_cells,
                 )
                 # 前向传播
                 # 前向计算损失

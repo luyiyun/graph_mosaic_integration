@@ -32,11 +32,11 @@ result_path = f"./result/{datetime.now().strftime('%Y-%m-%d_%H-%M')}"
 
 # 设定参数
 gmi_model = GraphMosaicIntegration(
-    label_smoothing=0.0,
-    alpha=0.05,
-    loss_alpha=0.05,
+    label_smoothing=0.1,
+    alpha=0.1,
+    loss_alpha=0.1,
     adversarial_training=True,
-    adversarial_batching_method="unique",
+    adversarial_batching_method="divide",
     val_split=0.1,
     patience=5,
     num_epochs=100,

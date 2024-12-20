@@ -62,6 +62,7 @@ class GraphMosaicIntegration:
     late_join_alpha: int = 5
     patience: int | float = 5  # inf or np.inf表示不使用早停
     random_seed: int = 0
+    std_loss_alpha: float = 0.0
 
     def fit(
         self,
@@ -220,6 +221,7 @@ class GraphMosaicIntegration:
             hidden_dims=self.disc_hiddens,
             bn=self.disc_bn,
             add_batch_embedding=self.add_batch_embedding,
+            n_cells=graph.n_cells,
         )
 
         # 初始化训练器
@@ -243,6 +245,7 @@ class GraphMosaicIntegration:
             late_join_loss_alpha=self.late_join_loss_alpha,
             patience=self.patience,
             random_seed=self.random_seed,
+            std_loss_alpha=self.std_loss_alpha,
         )
 
         self.trainer.train(
@@ -281,6 +284,7 @@ class GraphMosaicIntegration:
             late_join_loss_alpha=0,
             patience=self.patience,
             random_seed=self.random_seed,
+            std_loss_alpha=self.std_loss_alpha,
         )
         self.trainer_balanced.train(
             graph=graph,
