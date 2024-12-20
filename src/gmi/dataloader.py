@@ -35,6 +35,11 @@ class EdgesDataset:
         self.return_ndoe_groups = return_ndoe_groups
 
         edges_df = graph.edges_df
+        all_edges = torch.tensor(
+            edges_df[["src", "dst"]].values,
+            dtype=torch.long,
+            device=self.device,
+        )  # 负采样的时候需要知道所有的正样本
         if subset is not None:
             edges_df = edges_df.iloc[subset, :]
         # 将所有需要的内容都先放在device上
@@ -61,8 +66,9 @@ class EdgesDataset:
 
         self.neg_sampler = NegativeSampler(
             n_nodes=graph.n_nodes,
-            num_cell=graph.n_cells,
+            n_cells=graph.n_cells,
             num_neg_per_pos=num_neg_per_pos,
+            all_edges=all_edges,
             neg_sampling_mode=self.neg_sampling_mode,
             node_group=self._node_group,
             neg_sampling_restrict=self._edge_group,
@@ -78,22 +84,21 @@ class EdgesDataset:
             if self.use_edge_weights:
                 self._edge_weights = self._edge_weights[indices]
         if not self.neg_sample_in_batch:
-            self._neg_edges = self.neg_sampler.negative_sampling(self._edges)
+            self._neg_edges = self.neg_sampler.sample(self._edges)
 
     def __len__(self) -> int:
         return (self._edges.shape[0] + self.batch_size - 1) // self.batch_size
 
     def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
         start, end = (
-            idx * self.batch_size, (idx + 1) * self.batch_size,
+            idx * self.batch_size,
+            (idx + 1) * self.batch_size,
         )
         # 获取当前批次的正样本
         batch_pos_edges = self._edges[start:end, :]
         # 获取当前批次的负样本
         if self.neg_sample_in_batch:
-            batch_neg_edges = self.neg_sampler.negative_sampling(
-                batch_pos_edges
-            )
+            batch_neg_edges = self.neg_sampler.sample(batch_pos_edges)
         else:
             batch_neg_edges = self._neg_edges[start:end]
         # 获取当前批次的边权重

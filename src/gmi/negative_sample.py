@@ -1,4 +1,5 @@
 from typing import Literal
+from dataclasses import dataclass
 from logging import getLogger
 
 import torch
@@ -7,6 +8,20 @@ import torch
 logger = getLogger(__name__)
 
 
+def get_edge_indices(
+    n_nodes: int, src: torch.Tensor, dst: torch.Tensor
+) -> torch.Tensor:
+    """
+    计算边的索引。
+    参数：
+    edges: torch.Size([x, 2]) 边的起始节点和目标节点的索引。
+    返回：
+    边的索引。
+    """
+    return torch.minimum(src, dst) * n_nodes + torch.maximum(src, dst)
+
+
+@dataclass
 class NegativeSampler:
     """
     full: 所有未包含在edges中的边均被认为是负采样的候选，比如：feature-feature，feature-cell
@@ -15,51 +30,31 @@ class NegativeSampler:
     matched：对于每一条正边，只有其所在组学矩阵中的负边才被认为是其负采样的候选
     """
 
-    def __init__(
-        self,
-        # nodes,
-        n_nodes: int,
-        num_cell: int,
-        num_neg_per_pos: int,
-        # edges_infor,
-        neg_sampling_mode: Literal["full", "bipartitle", "matched", "visible"],
-        node_group: torch.Tensor | None = None,
-        neg_sampling_restrict: list[tuple[int, int]] | None = None,
-    ):
-        """
-        初始化 NegativeSampler 类的实例。
+    n_nodes: int
+    n_cells: int
+    num_neg_per_pos: int
+    all_edges: torch.Tensor
+    neg_sampling_mode: Literal["full", "bipartitle", "matched", "visible"]
+    node_group: torch.Tensor | None = None
+    neg_sampling_restrict: list[tuple[int, int]] | None = None
 
-        参数：
-        - nodes: 包含节点信息的张量，第一列是类型，第二列是节点的索引。
-        - num_neg_per_pos: 每条正边采多少负边。
-        - edges_infor: 包含排序后完整边信息的张量。
-        - neg_sampling_mode: 负采样的模式（"full","bipartitle"， "matched", "visible"）。
-        - neg_sampling_restrict: 类型约束，用于 "matched" 和 "visible" 模式。
-        """
-        if neg_sampling_mode == "matched":
+    def __post_init__(self):
+        if self.neg_sampling_mode == "matched":
+            assert self.neg_sampling_restrict is not None, (
+                "neg_sampling_restrict must be provided "
+                "when neg_sampling_mode is 'matched'"
+            )
+            assert self.node_group is not None, (
+                "node_group must be provided "
+                "when neg_sampling_mode is 'matched'"
+            )
             assert (
-                neg_sampling_restrict is not None
-            ), "neg_sampling_restrict must be provided when neg_sampling_mode is 'matched'"
-            assert (
-                node_group is not None
-            ), "node_group must be provided when neg_sampling_mode is 'matched'"
-            assert node_group.shape[0] == n_nodes, "XXXXX"
+                self.node_group.shape[0] == self.n_nodes
+            ), "node_group.shape[0]!= n_nodes"
 
-        # self.nodes = nodes
-        self.node_group = node_group  # 所有节点的type，包含batch和mod信息
-        self.n_cell_node = num_cell
-        self.num_neg_per_pos = num_neg_per_pos
-        # self.edges_infor = edges_infor
-        self.neg_sampling_mode = neg_sampling_mode
-        self.neg_sampling_restrict = neg_sampling_restrict
+        self.all_edges_idx = get_edge_indices(self.n_nodes, *self.all_edges.T)
 
-        self.n_nodes = n_nodes
-        # self.total_neg_samples = edges_infor.shape[0] * num_neg_per_pos
-        # self.all_edges_idx = torch.minimum(
-        #     edges_infor[:, 0], edges_infor[:, 1]
-        # ) * self.n_nodes + torch.maximum(edges_infor[:, 0], edges_infor[:, 1])
-
-    def negative_sampling(self, edges: torch.Tensor) -> torch.Tensor:
+    def sample(self, edges: torch.Tensor) -> torch.Tensor:
         """
         根据不同的负采样模式执行负采样操作。
 
@@ -67,19 +62,16 @@ class NegativeSampler:
         - 负样本的张量。
         """
         src, dst = edges.T
-        pos_edges_idx = torch.minimum(src, dst) * self.n_nodes + torch.maximum(
-            src, dst
-        )
-        # total_neg_samples = edges_infor.shape[0] * self.num_neg_per_pos
+        pos_edges_idx = get_edge_indices(self.n_nodes, src, dst)
 
         if self.neg_sampling_mode == "full":
-            return self.negative_sampling_full(pos_edges_idx)
+            return self.full_sample(pos_edges_idx)
         if self.neg_sampling_mode == "bipartitle":
-            return self.negative_sampling_bipartitle(pos_edges_idx)
+            return self.bipartitle_sample(pos_edges_idx)
         elif self.neg_sampling_mode == "visible":
             raise NotImplementedError
         elif self.neg_sampling_mode == "matched":
-            return self.negative_sampling_matched(
+            return self.matched_sample(
                 pos_edges_idx, self.node_group[src], self.node_group[dst]
             )
         else:
@@ -128,10 +120,8 @@ class NegativeSampler:
             mask = src_n != dst_n
             src_n, dst_n = src_n[mask], dst_n[mask]
 
-            idx_n = torch.minimum(src_n, dst_n) * self.n_nodes + torch.maximum(
-                src_n, dst_n
-            )
-            mask = ~torch.isin(idx_n, pos_edge_idx)
+            idx_n = get_edge_indices(self.n_nodes, src_n, dst_n)
+            mask = ~torch.isin(idx_n, self.all_edges_idx)
 
             valid_neg_samples = torch.stack([src_n[mask], dst_n[mask]], dim=1)
             collected_neg_samples.append(valid_neg_samples)
@@ -145,9 +135,7 @@ class NegativeSampler:
             -1, self.num_neg_per_pos, 2
         )
 
-    def negative_sampling_full(
-        self, pos_edge_idx: torch.Tensor
-    ) -> torch.Tensor:
+    def full_sample(self, pos_edge_idx: torch.Tensor) -> torch.Tensor:
         """
         full 负采样模式。
         """
@@ -157,18 +145,16 @@ class NegativeSampler:
             pos_edge_idx, all_nodes, all_nodes
         )
 
-    def negative_sampling_bipartitle(
-        self, pos_edges_idx: torch.Tensor
-    ) -> torch.Tensor:
+    def bipartitle_sample(self, pos_edges_idx: torch.Tensor) -> torch.Tensor:
         """
         bipartitle 负采样模式。
         # NOTE: 当加入feature之间的边时，理论上无法采到feature之间的负边
         """
         src_candidates = torch.arange(
-            self.n_cell_node, device=pos_edges_idx.device
+            self.n_cells, device=pos_edges_idx.device
         )
         dst_candidates = torch.arange(
-            self.n_cell_node, self.n_nodes, device=pos_edges_idx.device
+            self.n_cells, self.n_nodes, device=pos_edges_idx.device
         )
         return self.negative_sample_by_candicate_indices(
             pos_edges_idx, src_candidates, dst_candidates
@@ -200,7 +186,7 @@ class NegativeSampler:
         # neg_samples = torch.cat(collected_neg_samples, dim=0)
         # return neg_samples.reshape(-1, self.num_neg_per_pos, 2)
 
-    def negative_sampling_matched(
+    def matched_sample(
         self,
         pos_edges_idx: torch.Tensor,
         src_group: torch.Tensor,

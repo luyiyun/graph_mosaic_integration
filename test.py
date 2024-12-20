@@ -33,9 +33,10 @@ result_path = f"./result/{datetime.now().strftime('%Y-%m-%d_%H-%M')}"
 # 设定参数
 gmi_model = GraphMosaicIntegration(
     label_smoothing=0.0,
-    alpha=1,
-    loss_alpha=1,
+    alpha=0.05,
+    loss_alpha=0.05,
     adversarial_training=True,
+    adversarial_batching_method="unique",
     val_split=0.1,
     patience=5,
     num_epochs=100,
@@ -44,7 +45,7 @@ gmi_model = GraphMosaicIntegration(
     device="cuda:0",
     adversartial_balance_weights=False,
     num_epochs_with_balanced_weights=20,
-    learning_rate=0.002,
+    learning_rate=0.01,
 )
 gmi_model.fit(mdata, batch_key="batch", feature_interaction_key="net")
 gmi_model.save(result_path)
