@@ -10,9 +10,9 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from scipy.optimize import linear_sum_assignment
 from gmi import GraphMosaicIntegration
-
-# import colorcet as cc
+from gmi.metric import convert_mudata_to_anndata
 from sklearn.preprocessing import normalize
+from scib_metrics.benchmark import Benchmarker, BioConservation
 
 
 def test_balance_weights():
@@ -358,53 +358,93 @@ def main():
         .loc[mdata.obs_names]
         .astype("category")
     )
-    result_path = f"./result/{datetime.now().strftime('%Y-%m-%d_%H-%M')}"
+    # result_path = f"./result/{datetime.now().strftime('%Y-%m-%d_%H-%M')}"
+    result_path = "./result/2024-12-21_15-59"
 
-    # 设定参数
-    gmi_model = GraphMosaicIntegration(
-        label_smoothing=0.1,
-        alpha=0.1,
-        loss_alpha=0.1,
-        adversarial_training=True,
-        adversarial_batching_method="divide",
-        val_split=0.1,
-        patience=5,
-        num_epochs=100,
-        late_join_alpha=0,
-        late_join_loss_alpha=0,
-        device="cuda:0",
-        adversartial_balance_weights=False,
-        num_epochs_with_balanced_weights=20,
-        learning_rate=0.01,
-    )
-    gmi_model.fit(mdata, batch_key="batch", feature_interaction_key="net")
-    gmi_model.save(result_path)
-    gmi_model.plot_losses(osp.join(result_path, "losses.png"))
-
-    if gmi_model.adversartial_balance_weights:
-        mdata.obs["weights"] = gmi_model.graph.nodes_adversarial_weights
+    if osp.exists(result_path):
+        print(f"{result_path} already exists, read trained results...")
+        mdata.obsm["gmi"] = (
+            pd.read_csv(
+                osp.join(result_path, "final_embeddings.csv"), index_col=0
+            )
+            .loc[mdata.obs_names, :]
+            .values
+        )
     else:
-        mdata.obs["weights"] = gmi_model.trainer.estimate_balance_weights()
+        # 设定参数
+        gmi_model = GraphMosaicIntegration(
+            label_smoothing=0.1,
+            alpha=0.2,
+            loss_alpha=0.2,
+            adversarial_training=True,
+            adversarial_batching_method="divide",
+            val_split=0.1,
+            patience=5,
+            num_epochs=100,
+            late_join_alpha=0,
+            late_join_loss_alpha=0,
+            device="cuda:0",
+            adversartial_balance_weights=False,
+            num_epochs_with_balanced_weights=20,
+            learning_rate=0.01,
+            add_batch_embedding=True,
+        )
+        gmi_model.fit(mdata, batch_key="batch", feature_interaction_key="net")
+        gmi_model.save(result_path)
+        gmi_model.plot_losses(osp.join(result_path, "losses.png"))
 
-    mdata.obsm["gmi"] = (
-        gmi_model.embeddings[: mdata.n_obs].detach().cpu().numpy()
+        if gmi_model.adversartial_balance_weights:
+            mdata.obs["weights"] = gmi_model.graph.nodes_adversarial_weights
+        else:
+            mdata.obs["weights"] = gmi_model.trainer.estimate_balance_weights()
+
+        mdata.obsm["gmi"] = (
+            gmi_model.embeddings[: mdata.n_obs].detach().cpu().numpy()
+        )
+
+        fg = sns.displot(mdata.obs["weights"], kde=True, rug=True)
+        fg.savefig(osp.join(result_path, "weights_dist.png"))
+
+        sc.pp.neighbors(mdata, use_rep="gmi")
+        sc.tl.umap(mdata)
+        fig = sc.pl.umap(
+            mdata,
+            color=["batch", "coarse_cluster", "cluster", "weights"],
+            show=False,
+            return_fig=True,
+            ncols=2,
+        )
+        fig.savefig(osp.join(result_path, "umap.png"))
+
+    print(mdata)
+    adata = convert_mudata_to_anndata(
+        mdata=mdata,
+        sparse=True,
+        fillna=0.0,
+        obs=["coarse_cluster", "batch"],  # 指定保留的 obs 列
+        obsm=["gmi"],  # 指定保留的 obsm 键
     )
-
-    fg = sns.displot(mdata.obs["weights"], kde=True, rug=True)
-    fg.savefig(osp.join(result_path, "weights_dist.png"))
-
-    sc.pp.neighbors(mdata, use_rep="gmi")
-    sc.tl.umap(mdata)
-    fig = sc.pl.umap(
-        mdata,
-        color=["batch", "coarse_cluster", "cluster", "weights"],
-        show=False,
-        return_fig=True,
-        ncols=2,
+    bm = Benchmarker(
+        adata,
+        batch_key="batch",
+        label_key="coarse_cluster",
+        embedding_obsm_keys=["gmi"],
+        n_jobs=-1,
+        bio_conservation_metrics=BioConservation(
+            nmi_ari_cluster_labels_kmeans=False,
+            nmi_ari_cluster_labels_leiden=True,
+        ),
     )
-    fig.savefig(osp.join(result_path, "umap.png"))
+    bm.benchmark()
+    bm.plot_results_table(min_max_scale=False, save_dir=result_path)
+
+    # 打印详细的结果数据框
+    df = bm.get_results(min_max_scale=False)
+    df_transposed = df.transpose()
+    print(df_transposed)
+    df_transposed.to_csv(osp.join(result_path, "benchmark_result.csv"))
 
 
 if __name__ == "__main__":
-    # main()
-    test_balance_weights()
+    main()
+    # test_balance_weights()
