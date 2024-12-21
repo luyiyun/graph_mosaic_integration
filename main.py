@@ -10,20 +10,20 @@ from gmi import (
     plot_umap,
 )
 
-for i in [1,1,1,1,1,2,2,2,2,2,3,3,3,3,3,4,4,4,4,4,5,5,5,5,5,6,6,6,6,6,7,7,7,7,7,8,8,8,8,8,9,9,9,9,9,10,10,10,10,10]:
-    mdata_path = "/data/share_data/yuytest/gmi_data/pbmc.h5mu"
+for i in [1]:
+    mdata_path = "/data/share_data/yuytest/gmi_data/muto.h5mu"
     mdata = mu.read(mdata_path)
-    result_path = f"./pbmc_test_result/{datetime.now().strftime('%Y-%m-%d_%H-%M')}"
+    result_path = f"./result/{datetime.now().strftime('%Y-%m-%d_%H-%M')}"
     # 获取完整的batch和标签，并保存在batch和标签列
     mdata = data_infor_integrate(
         mdata,
-        feature_key="batch",
+        feature_key="batch5",
         saved_feature_name="batch",
         target_attr="obs",
     )
     mdata = data_infor_integrate(
         mdata,
-        feature_key="coarse_cluster",
+        feature_key="cell_type",
         saved_feature_name="label",
         target_attr="obs",
     )
@@ -45,8 +45,8 @@ for i in [1,1,1,1,1,2,2,2,2,2,3,3,3,3,3,4,4,4,4,4,5,5,5,5,5,6,6,6,6,6,7,7,7,7,7,
     gmi_model = GraphMosaicIntegration(
         num_neg_per_pos=num_neg_per_pos,
         label_smoothing=0.1,
-        alpha=0.2,
-        loss_alpha=0.2,
+        alpha=0.1,
+        loss_alpha=0.1,
         adversarial_training=True,
         adversarial_batching_method="divide",
         val_split=0.1,
@@ -54,7 +54,7 @@ for i in [1,1,1,1,1,2,2,2,2,2,3,3,3,3,3,4,4,4,4,4,5,5,5,5,5,6,6,6,6,6,7,7,7,7,7,
         num_epochs=100,
         late_join_alpha=0,
         late_join_loss_alpha=0,
-        device="cuda:0",
+        device="cuda:1",
         adversartial_balance_weights=False,
         num_epochs_with_balanced_weights=20,
         learning_rate=0.01,
