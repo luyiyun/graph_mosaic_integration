@@ -34,6 +34,7 @@ develop = [
     "pytest",
     "seaborn",
     "scib_metrics",
+    "colorcet",
     # "harmony-py"
 ]
 
