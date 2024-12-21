@@ -1,6 +1,7 @@
 .*
 data/
 result/
+*result*/  
 build/
 **/*.egg-info/
 **/__pycache__/

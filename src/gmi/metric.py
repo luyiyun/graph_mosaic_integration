@@ -124,7 +124,7 @@ def convert_mudata_to_anndata(
 
 def run_benchmark(mdata,num_cell, result_dir):
     # 数据读取
-    embedding_path = os.path.join(result_dir, "final_embeddings_matched_add_feat.csv")
+    embedding_path = os.path.join(result_dir, "final_embeddings.csv")
     if os.path.exists(embedding_path):
         embeddings = pd.read_csv(embedding_path, index_col=0)
 
