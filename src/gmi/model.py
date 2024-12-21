@@ -90,11 +90,12 @@ class FullModel(nn.Module):
         self,
         num_nodes,
         embedding_dim,
-        num_batch=None,
+        num_batch: int | None = None,
         hidden_dims: tuple[int] = (64,),
         bn: bool = False,
         add_batch_embedding: bool = False,
         n_cells: int | None = None,
+        bilinear: bool = False,
     ):
         if add_batch_embedding and num_batch is None:
             raise ValueError(
@@ -105,6 +106,7 @@ class FullModel(nn.Module):
         super(FullModel, self).__init__()
         self.add_batch_embedding = add_batch_embedding
         self.n_cells = n_cells
+        self.bilinear = bilinear
 
         # 嵌入层
         self.node_embedding = nn.Embedding(num_nodes, embedding_dim)
@@ -119,6 +121,10 @@ class FullModel(nn.Module):
             print("initialized edge model")
         if add_batch_embedding:
             self.batch_embedding = nn.Embedding(num_batch, embedding_dim)
+        if bilinear:
+            self.relation_matrix = nn.Parameter(
+                torch.randn(embedding_dim, embedding_dim) * 0.1
+            )
 
     def forward(
         self,
@@ -155,12 +161,26 @@ class FullModel(nn.Module):
             )
 
         # 计算边得分
-        pos_scores = torch.einsum(
-            "ij,ij->i", pos_edges_emb[:, 0], pos_edges_emb[:, 1]
-        )
-        neg_scores = torch.einsum(
-            "ijk,ijk->ij", neg_edges_emb[:, :, 0], neg_edges_emb[:, :, 1]
-        )
+        if self.bilinear:
+            pos_scores = torch.einsum(
+                "ij,ik,jk->i",
+                pos_edges_emb[:, 0],
+                pos_edges_emb[:, 1],
+                self.relation_matrix,
+            )
+            neg_scores = torch.einsum(
+                "ijk,ijl,kl->ij",
+                neg_edges_emb[:, :, 0],
+                neg_edges_emb[:, :, 1],
+                self.relation_matrix,
+            )
+        else:
+            pos_scores = torch.einsum(
+                "ij,ij->i", pos_edges_emb[:, 0], pos_edges_emb[:, 1]
+            )
+            neg_scores = torch.einsum(
+                "ijk,ijk->ij", neg_edges_emb[:, :, 0], neg_edges_emb[:, :, 1]
+            )
 
         # 领域分类嵌入表示
         pos_domain_preds = None

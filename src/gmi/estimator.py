@@ -63,6 +63,7 @@ class GraphMosaicIntegration:
     patience: int | float = 5  # inf or np.inf表示不使用早停
     random_seed: int = 0
     std_loss_alpha: float = 0.0
+    bilinear: bool = False
 
     def fit(
         self,
@@ -222,6 +223,7 @@ class GraphMosaicIntegration:
             bn=self.disc_bn,
             add_batch_embedding=self.add_batch_embedding,
             n_cells=graph.n_cells,
+            bilinear=self.bilinear,
         )
 
         # 初始化训练器

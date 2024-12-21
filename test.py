@@ -358,8 +358,8 @@ def main():
         .loc[mdata.obs_names]
         .astype("category")
     )
-    # result_path = f"./result/{datetime.now().strftime('%Y-%m-%d_%H-%M')}"
-    result_path = "./result/2024-12-21_15-59"
+    result_path = f"./result/{datetime.now().strftime('%Y-%m-%d_%H-%M')}"
+    # result_path = "./result/2024-12-21_15-59"
 
     if osp.exists(result_path):
         print(f"{result_path} already exists, read trained results...")
@@ -388,6 +388,7 @@ def main():
             num_epochs_with_balanced_weights=20,
             learning_rate=0.01,
             add_batch_embedding=True,
+            bilinear=True,
         )
         gmi_model.fit(mdata, batch_key="batch", feature_interaction_key="net")
         gmi_model.save(result_path)
