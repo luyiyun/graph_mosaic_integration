@@ -38,7 +38,7 @@ class GraphMosaicIntegration:
     disc_bn: bool = True
     add_batch_embedding: bool = False
     learning_rate: float = 0.01
-    num_neg_per_pos: int = 10
+    num_neg_per_pos: int = 4
     num_epochs: int = 100
     batch_size: int = 131072
     val_split: float = 0.2  # 验证集比例
