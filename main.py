@@ -10,14 +10,14 @@ from gmi import (
     plot_umap,
 )
 
-for i in [1]:
+for i in [0]:
     mdata_path = "/data/share_data/yuytest/gmi_data/muto.h5mu"
     mdata = mu.read(mdata_path)
     result_path = f"./result/{datetime.now().strftime('%Y-%m-%d_%H-%M')}"
     # 获取完整的batch和标签，并保存在batch和标签列
     mdata = data_infor_integrate(
         mdata,
-        feature_key="batch5",
+        feature_key="batch",
         saved_feature_name="batch",
         target_attr="obs",
     )
@@ -34,18 +34,20 @@ for i in [1]:
         target_attr="obsm",
         dim_limit=100,
     )
-
-    num_neg_per_pos=i
+    batch_mapping = {category: idx + 1 for idx, category in enumerate(mdata.obs['batch'].cat.categories)}
+    mdata.obs['batch'] = mdata.obs['batch'].map(batch_mapping)
+    # import ipdb; ipdb.set_trace()
+    num_neg_per_pos=4
     label_smoothing =0.1
-    alpha=0.2
-    loss_alpha=0.2
+    alpha=0.05
+    loss_alpha=i
     neg_sampling_mode = "matched"
     adversartial_balance_weights=False
 
     gmi_model = GraphMosaicIntegration(
         num_neg_per_pos=num_neg_per_pos,
         label_smoothing=0.1,
-        alpha=0.1,
+        alpha=0.05,
         loss_alpha=0.1,
         adversarial_training=True,
         adversarial_batching_method="divide",
