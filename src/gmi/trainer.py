@@ -191,6 +191,9 @@ class Trainer:
                 discriminate_weights=batch["weight"]
                 if self.adversarial_training
                 else None,
+                embeddings=self.model.node_embedding.weight
+                if self.std_loss_alpha > 0
+                else None,
                 edge_loss_type=self.loss_type,
                 loss_alpha=loss_alpha,
                 label_smoothing=self.label_smoothing,

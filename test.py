@@ -7,7 +7,9 @@ import pandas as pd
 import mudata as mu
 import scanpy as sc
 import seaborn as sns
+import matplotlib as mpl
 import matplotlib.pyplot as plt
+import colorcet as cc
 from scipy.optimize import linear_sum_assignment
 from gmi import GraphMosaicIntegration
 from gmi.metric import convert_mudata_to_anndata
@@ -98,39 +100,41 @@ def test_balance_weights():
         mdata.uns["n_clusters"] = n_clusters
         mdata.write(embed_with_umap_fn)
 
-    # colors = sns.color_palette()
-    # fig, axs = plt.subplots(2, 2, figsize=(10, 10))
-    # axs = axs.flatten()
-    # for i, batch in enumerate(mdata.obs["batch"].unique()):
-    #     ax = axs[i]
-    #     mask = mdata.obs["batch"] == batch
-    #     mdata_i = mdata[mask]
-    #     for j, cluster_j in enumerate(
-    #         mdata_i.obs["cluster_per_batch"].unique()
-    #     ):
-    #         mask_j = mdata_i.obs["cluster_per_batch"] == cluster_j
-    #         umap_xy = mdata_i.obsm["X_umap"][mask_j]
-    #         umap_xy_mean = np.mean(umap_xy, axis=0)
-    #         ax.plot(
-    #             mdata_i.obsm["X_umap"][mask_j, 0],
-    #             mdata_i.obsm["X_umap"][mask_j, 1],
-    #             ".",
-    #             label=f"cluster {cluster_j}",
-    #             color=colors[j],
-    #             markersize=3,
-    #             alpha=0.3,
-    #         )
-    #         ax.plot(
-    #             umap_xy_mean[0],
-    #             umap_xy_mean[1],
-    #             "o",
-    #             color=colors[j],
-    #             label=f"cluster {cluster_j}",
-    #         )
-    #    ax.legend()
-    #    ax.set_title(f"batch {batch}")
-    # fig.tight_layout()
-    # fig.savefig(osp.join(root, "umap_cluster_per_batch.png"))
+    fn = osp.join(root, "umap_cluster_per_batch.png")
+    if not osp.exists(fn):
+        colors = sns.color_palette()
+        fig, axs = plt.subplots(2, 2, figsize=(10, 10))
+        axs = axs.flatten()
+        for i, batch in enumerate(mdata.obs["batch"].unique()):
+            ax = axs[i]
+            mask = mdata.obs["batch"] == batch
+            mdata_i = mdata[mask]
+            for j, cluster_j in enumerate(
+                mdata_i.obs["cluster_per_batch"].unique()
+            ):
+                mask_j = mdata_i.obs["cluster_per_batch"] == cluster_j
+                umap_xy = mdata_i.obsm["X_umap"][mask_j]
+                umap_xy_mean = np.mean(umap_xy, axis=0)
+                ax.plot(
+                    mdata_i.obsm["X_umap"][mask_j, 0],
+                    mdata_i.obsm["X_umap"][mask_j, 1],
+                    ".",
+                    label=f"cluster {cluster_j}",
+                    color=colors[j],
+                    markersize=3,
+                    alpha=0.3,
+                )
+                ax.plot(
+                    umap_xy_mean[0],
+                    umap_xy_mean[1],
+                    "o",
+                    color=colors[j],
+                    label=f"cluster {cluster_j}",
+                )
+        ax.legend()
+        ax.set_title(f"batch {batch}")
+        fig.tight_layout()
+        fig.savefig(osp.join(root, "umap_cluster_per_batch.png"))
 
     key = "cluster_matching"
     if key not in mdata.uns:
@@ -181,36 +185,39 @@ def test_balance_weights():
                     )
                     print(f"convert {idx1} to {idx2} in {k1}")
 
-    # # colors = sns.color_palette()
-    # colors = cc.glasbey_light
-    # fig, axs = plt.subplots(4, 4, figsize=(12, 12))
-    # batches = mdata.obs["batch"].unique()
-    # for i, batch_i in enumerate(batches):
-    #     mask = mdata.obs["batch"] == batch_i
-    #     mdata_i = mdata[mask]
-    #     for j, batch_j in enumerate(batches):
-    #         cluster_ij = mdata_i.obs
-    # [f"cluster_per_batch_matched_by_{batch_j}"]
-    #         ax = axs[j, i]
-    #         cluster_ij_unique = cluster_ij.unique()
-    #         cluster_ij_unique = np.sort(cluster_ij_unique)
-    #         for k, cluster_k in enumerate(cluster_ij_unique):
-    #             mask_k = cluster_ij == cluster_k
-    #             umap_xy = mdata_i.obsm["X_umap"][mask_k]
-    #             ax.plot(
-    #                 umap_xy[:, 0],
-    #                 umap_xy[:, 1],
-    #                 ".",
-    #                 label=f"cluster {cluster_k}",
-    #                 color="gray" if cluster_k == np.nan else colors[k],
-    #                 markersize=3,
-    #             )
-    #         # ax.legend()
-    #         ax.set_title(
-    #             f"b{batch_i[-1]} cells based on b{batch_j[-1]} clusters"
-    #         )
-    # fig.tight_layout()
-    # fig.savefig(osp.join(root, "umap_cluster_per_batch_matched.png"))
+    fn = osp.join(root, "umap_cluster_per_batch_matched.png")
+    if not osp.exists(fn):
+        # colors = sns.color_palette()
+        colors = cc.glasbey_light
+        fig, axs = plt.subplots(4, 4, figsize=(12, 12))
+        batches = mdata.obs["batch"].unique()
+        for i, batch_i in enumerate(batches):
+            mask = mdata.obs["batch"] == batch_i
+            mdata_i = mdata[mask]
+            for j, batch_j in enumerate(batches):
+                cluster_ij = mdata_i.obs[
+                    f"cluster_per_batch_matched_by_{batch_j}"
+                ]
+                ax = axs[j, i]
+                cluster_ij_unique = cluster_ij.unique()
+                cluster_ij_unique = np.sort(cluster_ij_unique)
+                for k, cluster_k in enumerate(cluster_ij_unique):
+                    mask_k = cluster_ij == cluster_k
+                    umap_xy = mdata_i.obsm["X_umap"][mask_k]
+                    ax.plot(
+                        umap_xy[:, 0],
+                        umap_xy[:, 1],
+                        ".",
+                        label=f"cluster {cluster_k}",
+                        color="gray" if cluster_k == np.nan else colors[k],
+                        markersize=3,
+                    )
+                # ax.legend()
+                ax.set_title(
+                    f"b{batch_i[-1]} cells based on b{batch_j[-1]} clusters"
+                )
+        fig.tight_layout()
+        fig.savefig(osp.join(root, "umap_cluster_per_batch_matched.png"))
 
     # 按照glue的方式来计算样本得分
     key = "glue_balance_weights"
@@ -244,68 +251,139 @@ def test_balance_weights():
             mdata.obs.loc[mask, key] = balancing
         mdata.write(embed_with_umap_fn)
 
-    # fig, axs = plt.subplots(ncols=2, figsize=(10, 6))
-    # batches = mdata.obs["batch"].unique()
-    # for i, batch in enumerate(batches):
-    #     ax = axs[i]
-    #     mask = mdata.obs["batch"] == batch
-    #     ax.plot()
-    # fig, axs = plt.subplots(ncols=2, figsize=(10, 5))
-    # ax = axs[0]
-    # for batch in mdata.obs["batch"].unique():
-    #     mdata_i = mdata[mdata.obs["batch"] == batch]
-    #     ax.plot(
-    #         mdata_i.obsm["X_umap"][:, 0],
-    #         mdata_i.obsm["X_umap"][:, 1],
-    #         ".",
-    #         label=f"batch {batch}",
-    #         markersize=3,
-    #     )
-    # ax.legend()
-    # ax = axs[1]
-    # cb = ax.scatter(
-    #     mdata.obsm["X_umap"][:, 0],
-    #     mdata.obsm["X_umap"][:, 1],
-    #     c=mdata.obs["glue_balance_weights"],
-    #     cmap="coolwarm",
-    #     s=3,
-    #     alpha=1.0,
-    # )
-    # fig.colorbar(cb)
-    # fig.tight_layout()
-    # fig.savefig(osp.join(root, "umap_glue_weights.png"))
+    fn = osp.join(root, "umap_glue_weights.png")
+    if not osp.exists(fn):
+        fig, axs = plt.subplots(ncols=2, figsize=(10, 6))
+        batches = mdata.obs["batch"].unique()
+        for i, batch in enumerate(batches):
+            ax = axs[i]
+            mask = mdata.obs["batch"] == batch
+            ax.plot()
+        fig, axs = plt.subplots(ncols=2, figsize=(10, 5))
+        ax = axs[0]
+        for batch in mdata.obs["batch"].unique():
+            mdata_i = mdata[mdata.obs["batch"] == batch]
+            ax.plot(
+                mdata_i.obsm["X_umap"][:, 0],
+                mdata_i.obsm["X_umap"][:, 1],
+                ".",
+                label=f"batch {batch}",
+                markersize=3,
+            )
+        ax.legend()
+        ax = axs[1]
+        cb = ax.scatter(
+            mdata.obsm["X_umap"][:, 0],
+            mdata.obsm["X_umap"][:, 1],
+            c=mdata.obs["glue_balance_weights"],
+            cmap="coolwarm",
+            s=3,
+            alpha=1.0,
+        )
+        fig.colorbar(cb)
+        fig.tight_layout()
+        fig.savefig(osp.join(root, "umap_glue_weights.png"))
 
     # 计算新的balance weights
     key = "gmi_balance_weights"
+    if key not in mdata.obsm:
+        print(f"{key} not found, calculating...")
+        batches = np.sort(mdata.obs["batch"].unique())
+        print(batches)
+        embed = mdata.obsm["gmi"]
+        embed = normalize(embed, axis=1, norm="l2")
+        balance_weights = np.zeros((mdata.n_obs, len(batches)))
+        for i, bi in enumerate(batches):
+            mask_i = mdata.obs["batch"].values == bi
+            embed_i = embed[mask_i]
+            embed_i_ = embed[~mask_i]
+            cosine = embed_i @ embed_i_.T
+            cosine[cosine < 0.1] = 0
+            # cosine = np.power(cosine, power)
+            scores_i = []
+            for bj in batches:
+                if bj == bi:
+                    continue
+                mask_j = mdata.obs["batch"].values[~mask_i] == bj
+                scores_ij = cosine[:, mask_j].mean(axis=1)
+                scores_i.append(scores_ij)
+            scores_i = np.stack(scores_i, axis=1)
+            scores_i = np.insert(scores_i, i, scores_i.max(axis=1), axis=1)
+            balance_weights[mask_i] = scores_i
+        balance_weights = balance_weights / balance_weights.mean()
+        mdata.obsm[key] = balance_weights
+        mdata.write(embed_with_umap_fn)
+
+    # 绘制权重分布图
+    fn = osp.join(root, "umap_gmi_weights.png")
+    if not osp.exists(fn):
+        key = "gmi_balance_weights"
+        fig, axs = plt.subplots(
+            ncols=4, nrows=4, figsize=(10, 10), layout="constrained"
+        )
+        batches = np.sort(mdata.obs["batch"].unique())
+        vmin, vmax = mdata.obsm[key].min(), mdata.obsm[key].max()
+        for i, batch_i in enumerate(batches):
+            mask_i = mdata.obs["batch"] == batch_i
+            mdata_i = mdata[mask_i]
+            for j, batch_j in enumerate(batches):
+                ax = axs[i, j]
+                cm = ax.scatter(
+                    mdata_i.obsm["X_umap"][:, 0],
+                    mdata_i.obsm["X_umap"][:, 1],
+                    c=mdata_i.obsm[key][:, j],
+                    cmap="coolwarm",
+                    s=3,
+                    vmin=vmin,
+                    vmax=vmax,
+                )
+                ax.set_title(f"b{batch_i[-1]} cells, b{batch_j[-1]} weights")
+        fig.colorbar(cm, ax=axs.ravel().tolist())
+        fig.savefig(fn)
+        # NOTE: 不能单点计算，这样会导致在同一个簇中的点得到最高的权重，
+        #   但是实际上这些点以及混合的非常好了，没有必要再进行提高权重
+
+    # gmi_balance_weights_2
+    # 结合glue和上面gmi_balance_weights的思路
+    key = "gmi_balance_weights_2"
     # if key not in mdata.obsm:
-    #     print(f"{key} not found, calculating...")
+    # print(f"{key} not found, calculating...")
     batches = np.sort(mdata.obs["batch"].unique())
-    print(batches)
-    embed = mdata.obsm["gmi"]
-    embed = normalize(embed, axis=1, norm="l2")
+    matches = mdata.uns["cluster_matching"]
     balance_weights = np.zeros((mdata.n_obs, len(batches)))
     for i, bi in enumerate(batches):
-        mask_i = mdata.obs["batch"].values == bi
-        embed_i = embed[mask_i]
-        embed_i_ = embed[~mask_i]
-        cosine = embed_i @ embed_i_.T
-        cosine[cosine < 0.1] = 0
-        # cosine = np.power(cosine, power)
         scores_i = []
         for bj in batches:
-            if bj == bi:
+            if bi == bj:
                 continue
-            mask_j = mdata.obs["batch"].values[~mask_i] == bj
-            scores_ij = cosine[:, mask_j].mean(axis=1)
+            if f"{bi}_{bj}" in matches:
+                match_ij = matches[f"{bi}_{bj}"]
+            elif f"{bj}_{bi}" in matches:
+                match_ij = matches[f"{bj}_{bi}"].T
+            else:
+                raise ValueError(f"No matching found for {bi} and {bj}")
+            match_ij = (
+                match_ij
+                / mdata.uns["n_clusters"][bj]
+                / mdata.uns["n_clusters"][bi][:, None]
+            )
+            scores_ij = match_ij.sum(axis=1)
             scores_i.append(scores_ij)
         scores_i = np.stack(scores_i, axis=1)
         scores_i = np.insert(scores_i, i, scores_i.max(axis=1), axis=1)
-        balance_weights[mask_i] = scores_i
-    balance_weights = balance_weights / balance_weights.mean()
+
+        mask_i = mdata.obs["batch"].values == bi
+        cluster_idx_i = mdata.obs.loc[mask_i, "cluster_per_batch"].values
+        balance_weights[mask_i] = scores_i[cluster_idx_i]
+    balance_weights = balance_weights / np.median(balance_weights)
     mdata.obsm[key] = balance_weights
+    # print(balance_weights)
     mdata.write(embed_with_umap_fn)
 
-    key = "gmi_balance_weights"
+    # 绘制权重分布图(2)
+    fn = osp.join(root, "umap_gmi_weights_2.png")
+    # if not osp.exists(fn):
+    key = "gmi_balance_weights_2"
     fig, axs = plt.subplots(
         ncols=4, nrows=4, figsize=(10, 10), layout="constrained"
     )
@@ -322,14 +400,13 @@ def test_balance_weights():
                 c=mdata_i.obsm[key][:, j],
                 cmap="coolwarm",
                 s=3,
-                vmin=vmin,
-                vmax=vmax,
+                # vmin=vmin,
+                # vmax=vmax,
+                norm=mpl.colors.LogNorm(vmin=vmin, vmax=vmax),
             )
             ax.set_title(f"b{batch_i[-1]} cells, b{batch_j[-1]} weights")
     fig.colorbar(cm, ax=axs.ravel().tolist())
-    fig.savefig(osp.join(root, "umap_gmi_weights.png"))
-    # NOTE: 不能单点计算，这样会导致在同一个簇中的点得到最高的权重，
-    #   但是实际上这些点以及混合的非常好了，没有必要再进行提高权重
+    fig.savefig(fn)
 
 
 def main():
@@ -389,6 +466,7 @@ def main():
             learning_rate=0.01,
             add_batch_embedding=True,
             bilinear=True,
+            std_loss_alpha=1e-4,
         )
         gmi_model.fit(mdata, batch_key="batch", feature_interaction_key="net")
         gmi_model.save(result_path)

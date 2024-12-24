@@ -4,10 +4,11 @@ import torch
 import torch.nn.functional as F
 
 
-def softmax_weighted_loss(
+def info_nce_loss(
     pos_score: torch.Tensor,
     neg_scores: torch.Tensor,
     edge_weights: torch.Tensor | None = None,
+    temperature: float = 1.0,
 ) -> torch.Tensor:
     if edge_weights is None:
         raise ValueError(
@@ -15,7 +16,9 @@ def softmax_weighted_loss(
         )
 
     # 合并正样本分数和负样本分数
-    all_scores = torch.cat([pos_score.unsqueeze(1), neg_scores], dim=1)
+    all_scores = (
+        torch.cat([pos_score.unsqueeze(1), neg_scores], dim=1) / temperature
+    )
 
     # 计算分母 sum(exp(s_{e'}))
     denominator = torch.logsumexp(all_scores, dim=1)
@@ -63,10 +66,11 @@ def domain_classification_loss(
 def graph_mosaic_integration_loss(
     pos_scores: torch.Tensor,
     neg_scores: torch.Tensor,
-    edge_weights: torch.Tensor | None = None,
     domain_preds: torch.Tensor | None = None,
     domain_labels: torch.Tensor | None = None,
+    edge_weights: torch.Tensor | None = None,
     discriminate_weights: torch.Tensor | None = None,
+    embeddings: torch.Tensor | None = None,
     edge_loss_type: Literal[
         "weighted_softmax", "margin_ranking"
     ] = "weighted_softmax",
@@ -74,13 +78,13 @@ def graph_mosaic_integration_loss(
     label_smoothing: float = 0.0,
     std_loss_alpha: float = 0.0,
 ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
-    if std_loss_alpha > 0.0:
-        raise NotImplementedError(
-            "Standard loss is not implemented for graph mosaic integration."
+    if std_loss_alpha > 0.0 and embeddings is None:
+        raise ValueError(
+            "embeddings must be provided for standard deviation loss."
         )
 
     if edge_loss_type == "weighted_softmax":
-        edge_loss = softmax_weighted_loss(pos_scores, neg_scores, edge_weights)
+        edge_loss = info_nce_loss(pos_scores, neg_scores, edge_weights)
     elif edge_loss_type == "margin_ranking":
         edge_loss = margin_ranking_loss(pos_scores, neg_scores)
     else:
@@ -99,6 +103,11 @@ def graph_mosaic_integration_loss(
             "Both domain_preds and domain_labels "
             "must be provided for domain classification."
         )
+
+    if std_loss_alpha > 0.0:
+        std_loss = embeddings.std(dim=0).mean()
+        loss_dict["std"] = std_loss
+        total_loss += std_loss_alpha * std_loss
 
     loss_dict["total"] = total_loss
     return total_loss, loss_dict
