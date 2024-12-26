@@ -1,62 +1,70 @@
-import numpy as np
+import os
 import pandas as pd
-from scipy import sparse
-import anndata as ad
-import mudata as mu
-from tqdm import tqdm
+import scanpy as sc
+import numpy as np
+import scipy.sparse as sp
 
+# 文件路径设置
+base_dir = "/data/share_data/yuytest/gmi_data/unprocessed"
+rna_path = os.path.join(base_dir, "GSM3681518_MNC_RNA_counts.tsv")
+adt_path = os.path.join(base_dir, "GSM3681519_MNC_ADT_counts.tsv")
+hto_path = os.path.join(base_dir, "GSM3681520_MNC_HTO_counts.tsv")
+output_dir = os.path.join(base_dir, "processed")
 
-rna_file = '/data/share_data/yuytest/gmi_data/unprocessed/GSM3681518_MNC_RNA_counts.tsv'
-# adt_file = '/data/share_data/yuytest/gmi_data/unprocessed/GSM3681519_MNC_ADT_counts.tsv'
-# hto_file = '/data/share_data/yuytest/gmi_data/unprocessed/GSM3681520_MNC_HTO_counts.tsv'
+# 创建输出目录
+os.makedirs(output_dir, exist_ok=True)
 
-reader = pd.read_table(rna_file, chunksize=10000)
-sarr, index = [], []
-for dfi in tqdm(reader):
-    sarr_i = sparse.coo_array(dfi.values)
-    sarr.append(sarr_i)
-    index.append(dfi.index.values)
-    # print(dfi.shape)
-    # print(dfi.iloc[:5, :5])
-    # break
-sarr = sparse.vstack(sarr)
-index = np.concatenate(index)
-column = dfi.column
+# RNA 数据加载和质量控制
+rna_counts = pd.read_csv(rna_path, sep="\t", index_col=0)
+adata_rna = sc.AnnData(sp.csr_matrix(rna_counts.T))
+adata_rna.var_names = rna_counts.index
+adata_rna.obs_names = rna_counts.columns
 
+# 添加质控指标
+adata_rna.var_names_make_unique()
+adata_rna.obs['n_genes'] = (adata_rna.X > 0).sum(1)
+adata_rna.obs['n_counts'] = adata_rna.X.sum(1)
+adata_rna.obs['percent_mt'] = np.sum(adata_rna[:, adata_rna.var_names.str.startswith('MT-')].X, axis=1) / adata_rna.obs['n_counts'] * 100
 
-# with open(rna_file, 'r') as f:
-#     rna_header = f.readline().strip().split('\t')  # 读取列名
-# rna = pd.read_csv(rna_file, sep='\t', dtype=str, names=rna_header, skiprows=1)  # 跳过表头
-# rna_sparse = sparse.csr_matrix(rna.values.astype(float))  # 转换为稀疏矩阵
-# rna_adata = ad.AnnData(rna_sparse)
-# rna_adata.var_names = rna_header[1:]  # 设置基因名
-# rna_adata.obs_names = rna.iloc[:, 0]  # 设置细胞名
+# 筛选条件
+sc.pp.filter_cells(adata_rna, min_genes=350)
+adata_rna = adata_rna[(adata_rna.obs['n_genes'] < 6000) & (adata_rna.obs['n_counts'] < 40000) & (adata_rna.obs['percent_mt'] < 20)]
 
+# ADT 数据加载和质量控制
+adt_counts = pd.read_csv(adt_path, sep="\t", index_col=0)
+adt_counts = adt_counts.T[adata_rna.obs_names]  # 确保细胞一致
+adata_adt = sc.AnnData(sp.csr_matrix(adt_counts))
+adata_adt.var_names = adt_counts.index
+adata_adt.obs_names = adt_counts.columns
+adata_adt.obs['n_counts'] = adata_adt.X.sum(1)
 
-# with open(adt_file, 'r') as f:
-#     adt_header = f.readline().strip().split('\t')
-# adt = pd.read_csv(adt_file, sep='\t', dtype=str, names=adt_header, skiprows=1)
-# adt_sparse = sparse.csr_matrix(adt.values.astype(float))
-# adt_adata = ad.AnnData(adt_sparse)
-# adt_adata.var_names = adt_header[1:]
-# adt_adata.obs_names = adt.iloc[:, 0]
+# 筛选条件
+adata_adt = adata_adt[(adata_adt.obs['n_counts'] > 500) & (adata_adt.obs['n_counts'] < 15000)]
 
+# HTO 数据加载和处理
+hto_counts = pd.read_csv(hto_path, sep="\t", index_col=0)
+hto_counts = hto_counts.T[adata_rna.obs_names]  # 确保细胞一致
+adata_hto = sc.AnnData(sp.csr_matrix(hto_counts))
+adata_hto.var_names = hto_counts.index
+adata_hto.obs_names = hto_counts.columns
 
-# hto = pd.read_csv(hto_file, sep='\t', index_col=0)
-# labels = hto.idxmax(axis=0)  # 每列最大值的行名作为标签
+# 归一化处理和分类
+adata_hto.X = np.log1p(adata_hto.X)
+hto_thresholds = np.percentile(adata_hto.X, 99, axis=0)
+labels = []
+for i, cell_counts in enumerate(adata_hto.X):
+    is_doublet = np.sum(cell_counts > hto_thresholds) > 1
+    labels.append('Doublet' if is_doublet else 'Singlet')
+adata_hto.obs['classification'] = labels
 
+# 仅保留 Singlet
+adata_hto = adata_hto[adata_hto.obs['classification'] == 'Singlet']
 
-# obs = pd.DataFrame({
-#     'batch': 1,  # 批次信息，设为1
-#     'label': labels
-# })
+# 交集细胞筛选
+intersect_cells = list(set(adata_rna.obs_names) & set(adata_adt.obs_names) & set(adata_hto.obs_names))
+adata_rna = adata_rna[intersect_cells]
+adata_adt = adata_adt[intersect_cells]
 
-# rna_adata.obs = obs
-# adt_adata.obs = obs
-
-# mdata = mu.MuData({"RNA": rna_adata, "ADT": adt_adata})
-
-# output_path = '/data/share_data/yuytest/gmi_data/integrated_mudata_sparse.h5mu'
-# mdata.write(output_path)
-
-# print(f"Mudata 文件已保存到: {output_path}")
+# 保存处理后的数据
+sc.write(os.path.join(output_dir, 'rna_processed.h5ad'), adata_rna)
+sc.write(os.path.join(output_dir, 'adt_processed.h5ad'), adata_adt)
