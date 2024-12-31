@@ -1,15 +1,38 @@
-options(repos = c(CRAN = "https://cloud.r-project.org"))
-
+#options(BioC_mirror = "https://mirrors.sjtug.sjtu.edu.cn/bioconductor/")
+options("repos" = c(CRAN="https://mirrors.tuna.tsinghua.edu.cn/CRAN/"))
 
 required_packages <- c(
-  "Seurat", "SeuratDisk", "ensembldb", "BiocGenerics", "GenomicRanges", 
+  "Seurat", "ensembldb", "BiocGenerics", "GenomicRanges", 
   "IRanges", "GenomeInfoDb", "GenomicFeatures", "AnnotationDbi", "Biobase", 
   "AnnotationFilter", "BSgenome", "Biostrings", "XVector", "rtracklayer", 
-  "dplyr", "Matrix", "purrr"
+  "dplyr", "Matrix", "purrr","rhdf5", "argparse"
 )
+
+
+
+
 # 检查缺失包并安装
 missing_packages <- required_packages[!(required_packages %in% installed.packages()[,"Package"])]
 if(length(missing_packages)) install.packages(missing_packages)
+
+if (!requireNamespace("remotes", quietly = TRUE)) {
+  install.packages("remotes")
+}
+remotes::install_github("mojaveazure/seurat-disk") 
+remotes::install_github("r-lib/ymlthis")
+
+# if (!require("BiocManager", quietly = TRUE))
+#   install.packages("BiocManager")
+# options(repos = c(
+#   CRAN = "https://mirrors.tuna.tsinghua.edu.cn/CRAN/",
+#   BioCsoft = "https://bioconductor.org/packages/3.16/bioc",  # 替换为你对应版本
+#   BioCann = "https://bioconductor.org/packages/3.16/data/annotation",
+#   BioCexp = "https://bioconductor.org/packages/3.16/data/experiment",
+#   BioCworkflows = "https://bioconductor.org/packages/3.16/workflows"
+# ))
+# BiocManager::install("BSgenome.Hsapiens.UCSC.hg38")
+library(GenomeInfoDb)
+library(BSgenome.Hsapiens.UCSC.hg38)
 # 加载所有包
 lapply(required_packages, library, character.only = TRUE)
 #===================================package===========================
@@ -29,26 +52,26 @@ source("/data/share_data/yuytest/gmi_data/unprocessed/utils.R")
 frag_path <- file.path("/data/share_data/yuytest/gmi_data/unprocessed", "GSM4732140_Human_BoneMarrow_hg38_fragments.tsv.gz")
 adt_path <- file.path("/data/share_data/yuytest/gmi_data/unprocessed", "GSM4732141_Human_BoneMarrow_ADT.tsv.gz")
 hto_path <- file.path("/data/share_data/yuytest/gmi_data/unprocessed", "GSM4732142_Human_BoneMarrow_HTO.tsv.gz")
-rna_path <- file.path("/data/share_data/yuytest/gmi_data/unprocessed", "GSM3681518_MNC_RNA_counts.tsv")
-adt_path <- file.path("/data/share_data/yuytest/gmi_data/unprocessed", "GSM3681519_MNC_ADT_counts.tsv")
-hto_path <- file.path("/data/share_data/yuytest/gmi_data/unprocessed", "GSM3681520_MNC_HTO_counts.tsv")
+#rna_path <- file.path("/data/share_data/yuytest/gmi_data/unprocessed", "GSM3681518_MNC_RNA_counts.tsv")
+#adt_path <- file.path("/data/share_data/yuytest/gmi_data/unprocessed", "GSM3681519_MNC_ADT_counts.tsv")
+#hto_path <- file.path("/data/share_data/yuytest/gmi_data/unprocessed", "GSM3681520_MNC_HTO_counts.tsv")
 
 output_dir <- file.path("/data/share_data/yuytest/gmi_data/unprocessed", "output")
 
-mkdir(output_dir, remove_old = T)
+# mkdir(output_dir, remove_old = T)
 #=================================file path============================
 
 # ADT
 # load data
 adt_counts <- t(read.table(file = adt_path, sep = "\t", header = TRUE, row.names = 1))
 adt <- gen_adt(adt_counts)
-
 VlnPlot(adt, c("nCount_adt"), pt.size = 0.001, ncol = 1, log = T) + NoLegend()
 adt
 # QC
 adt <- subset(adt, subset = nCount_adt > 150 & nCount_adt < 10000)
 VlnPlot(adt, c("nCount_adt"), pt.size = 0.001, ncol = 1, log = T) + NoLegend()
 adt
+
 
 # ATAC
 source("/data/share_data/yuytest/gmi_data/unprocessed/utils.R")
