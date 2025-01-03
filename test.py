@@ -22,13 +22,11 @@ def test_balance_weights():
     # root = "./result/2024-12-20_21-13"
     embed_with_umap_fn = osp.join(root, "embed_with_umap.h5mu")
     cutoff = 0.5
-    power = 4
 
+    power = 4
     if not osp.exists(embed_with_umap_fn):
         print(f"{embed_with_umap_fn} not found, generating...")
-        embed_df = pd.read_csv(
-            osp.join(root, "final_embeddings.csv"), index_col=0
-        )
+        embed_df = pd.read_csv(osp.join(root, "final_embeddings.csv"), index_col=0)
         embed = embed_df.values
 
         mdata = mu.read("./data/pbmc.h5mu")
@@ -46,10 +44,7 @@ def test_balance_weights():
             .astype("category")
         )
         mdata.obs["cluster"] = (
-            mdata.mod["protein"]
-            .obs["cluster"]
-            .loc[mdata.obs_names]
-            .astype("category")
+            mdata.mod["protein"].obs["cluster"].loc[mdata.obs_names].astype("category")
         )
 
         mdata.obsm["gmi"] = embed[: mdata.n_obs]
@@ -83,9 +78,7 @@ def test_balance_weights():
         for batch in mdata.obs["batch"].unique():
             mdata_i = mdata[mdata.obs["batch"] == batch]
             ui, ni = [], []
-            for cluster_j in np.sort(
-                mdata_i.obs["cluster_per_batch"].unique()
-            ):
+            for cluster_j in np.sort(mdata_i.obs["cluster_per_batch"].unique()):
                 mask_j = mdata_i.obs["cluster_per_batch"] == cluster_j
                 embed_mean_j = mdata_i.obsm["gmi"][mask_j].mean(axis=0)
                 n_j = mask_j.sum()
@@ -109,9 +102,7 @@ def test_balance_weights():
             ax = axs[i]
             mask = mdata.obs["batch"] == batch
             mdata_i = mdata[mask]
-            for j, cluster_j in enumerate(
-                mdata_i.obs["cluster_per_batch"].unique()
-            ):
+            for j, cluster_j in enumerate(mdata_i.obs["cluster_per_batch"].unique()):
                 mask_j = mdata_i.obs["cluster_per_batch"] == cluster_j
                 umap_xy = mdata_i.obsm["X_umap"][mask_j]
                 umap_xy_mean = np.mean(umap_xy, axis=0)
@@ -166,22 +157,14 @@ def test_balance_weights():
                 idx1, idx2 = linear_sum_assignment(v, maximize=True)
                 if k1 == batch:
                     mask_i = mdata.obs["batch"] == k2
-                    mdata.obs.loc[mask_i, key] = mdata.obs.loc[
-                        mask_i, key
-                    ].map(
-                        lambda x: {i2: i1 for i1, i2 in zip(idx1, idx2)}.get(
-                            x, np.nan
-                        )
+                    mdata.obs.loc[mask_i, key] = mdata.obs.loc[mask_i, key].map(
+                        lambda x: {i2: i1 for i1, i2 in zip(idx1, idx2)}.get(x, np.nan)
                     )
                     print(f"convert {idx2} to {idx1} in {k2}")
                 else:
                     mask_i = mdata.obs["batch"] == k1
-                    mdata.obs.loc[mask_i, key] = mdata.obs.loc[
-                        mask_i, key
-                    ].map(
-                        lambda x: {i1: i2 for i1, i2 in zip(idx1, idx2)}.get(
-                            x, np.nan
-                        )
+                    mdata.obs.loc[mask_i, key] = mdata.obs.loc[mask_i, key].map(
+                        lambda x: {i1: i2 for i1, i2 in zip(idx1, idx2)}.get(x, np.nan)
                     )
                     print(f"convert {idx1} to {idx2} in {k1}")
 
@@ -195,9 +178,7 @@ def test_balance_weights():
             mask = mdata.obs["batch"] == batch_i
             mdata_i = mdata[mask]
             for j, batch_j in enumerate(batches):
-                cluster_ij = mdata_i.obs[
-                    f"cluster_per_batch_matched_by_{batch_j}"
-                ]
+                cluster_ij = mdata_i.obs[f"cluster_per_batch_matched_by_{batch_j}"]
                 ax = axs[j, i]
                 cluster_ij_unique = cluster_ij.unique()
                 cluster_ij_unique = np.sort(cluster_ij_unique)
@@ -213,9 +194,7 @@ def test_balance_weights():
                         markersize=3,
                     )
                 # ax.legend()
-                ax.set_title(
-                    f"b{batch_i[-1]} cells based on b{batch_j[-1]} clusters"
-                )
+                ax.set_title(f"b{batch_i[-1]} cells based on b{batch_j[-1]} clusters")
         fig.tight_layout()
         fig.savefig(osp.join(root, "umap_cluster_per_batch_matched.png"))
 
@@ -384,9 +363,7 @@ def test_balance_weights():
     fn = osp.join(root, "umap_gmi_weights_2.png")
     # if not osp.exists(fn):
     key = "gmi_balance_weights_2"
-    fig, axs = plt.subplots(
-        ncols=4, nrows=4, figsize=(10, 10), layout="constrained"
-    )
+    fig, axs = plt.subplots(ncols=4, nrows=4, figsize=(10, 10), layout="constrained")
     batches = np.sort(mdata.obs["batch"].unique())
     vmin, vmax = mdata.obsm[key].min(), mdata.obsm[key].max()
     for i, batch_i in enumerate(batches):
@@ -418,10 +395,7 @@ def main():
 
     mdata = mu.read("./data/pbmc.h5mu")
     mdata.obs["batch"] = (
-        mdata.mod["protein"]
-        .obs["batch"]
-        .loc[mdata.obs_names]
-        .astype("category")
+        mdata.mod["protein"].obs["batch"].loc[mdata.obs_names].astype("category")
     )
     mdata.obs["coarse_cluster"] = (
         mdata.mod["protein"]
@@ -430,10 +404,7 @@ def main():
         .astype("category")
     )
     mdata.obs["cluster"] = (
-        mdata.mod["protein"]
-        .obs["cluster"]
-        .loc[mdata.obs_names]
-        .astype("category")
+        mdata.mod["protein"].obs["cluster"].loc[mdata.obs_names].astype("category")
     )
     result_path = f"./result/{datetime.now().strftime('%Y-%m-%d_%H-%M')}"
     # result_path = "./result/2024-12-21_15-59"
@@ -441,22 +412,19 @@ def main():
     if osp.exists(result_path):
         print(f"{result_path} already exists, read trained results...")
         mdata.obsm["gmi"] = (
-            pd.read_csv(
-                osp.join(result_path, "final_embeddings.csv"), index_col=0
-            )
+            pd.read_csv(osp.join(result_path, "final_embeddings.csv"), index_col=0)
             .loc[mdata.obs_names, :]
             .values
         )
     else:
         # 设定参数
         gmi_model = GraphMosaicIntegration(
-            label_smoothing=0.1,
+            label_smoothing=0.0,
             alpha=0.2,
             loss_alpha=0.2,
             adversarial_training=True,
             adversarial_batching_method="divide",
             val_split=0.1,
-            patience=5,
             num_epochs=100,
             late_join_alpha=0,
             late_join_loss_alpha=0,
@@ -466,7 +434,11 @@ def main():
             learning_rate=0.01,
             add_batch_embedding=True,
             bilinear=True,
-            std_loss_alpha=1e-4,
+            std_loss_alpha=0,
+            early_stop=True,
+            early_stop_patience=5,
+            # lr_scheduler=False,
+            # lr_scheduler_patience=5,
         )
         gmi_model.fit(mdata, batch_key="batch", feature_interaction_key="net")
         gmi_model.save(result_path)
@@ -477,9 +449,7 @@ def main():
         else:
             mdata.obs["weights"] = gmi_model.trainer.estimate_balance_weights()
 
-        mdata.obsm["gmi"] = (
-            gmi_model.embeddings[: mdata.n_obs].detach().cpu().numpy()
-        )
+        mdata.obsm["gmi"] = gmi_model.embeddings[: mdata.n_obs].detach().cpu().numpy()
 
         fg = sns.displot(mdata.obs["weights"], kde=True, rug=True)
         fg.savefig(osp.join(result_path, "weights_dist.png"))

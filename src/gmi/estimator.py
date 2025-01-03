@@ -60,7 +60,10 @@ class GraphMosaicIntegration:
     loss_type: Literal["margin_ranking, weighted_softmax"] = "weighted_softmax"
     late_join_loss_alpha: int = 5
     late_join_alpha: int = 5
-    patience: int | float = 5  # inf or np.inf表示不使用早停
+    early_stop: bool = True
+    early_stop_patience: int | float = 10
+    lr_scheduler: bool = False
+    lr_scheduler_patience: int = 5
     random_seed: int = 0
     std_loss_alpha: float = 0.0
     bilinear: bool = False
@@ -226,8 +229,7 @@ class GraphMosaicIntegration:
             bilinear=self.bilinear,
         )
 
-        # 初始化训练器
-        self.trainer = Trainer(
+        trainer_kwargs = dict(
             model=self.model,
             device=self.device,
             optimizer=self.optimizer,
@@ -245,10 +247,16 @@ class GraphMosaicIntegration:
             loss_type=self.loss_type,
             late_join_alpha=self.late_join_alpha,
             late_join_loss_alpha=self.late_join_loss_alpha,
-            patience=self.patience,
             random_seed=self.random_seed,
             std_loss_alpha=self.std_loss_alpha,
+            early_stop=self.early_stop,
+            early_stop_patience=self.early_stop_patience,
+            lr_scheduler=self.lr_scheduler,
+            lr_scheduler_patience=self.lr_scheduler_patience,
         )
+
+        # 初始化训练器
+        self.trainer = Trainer(**trainer_kwargs)
 
         self.trainer.train(
             graph=graph,
@@ -266,28 +274,15 @@ class GraphMosaicIntegration:
         graph.nodes_adversarial_weights = balanced_weights
         # 重新构建新的训练流程
         print("Retrain with balanced weights...")
-        self.trainer_balanced = Trainer(
-            model=self.model,
-            device=self.device,
-            optimizer=self.optimizer,
-            lr=self.learning_rate * 0.1,
-            neg_sample_in_batch=self.neg_sample_in_batch,
-            adversarial_training=self.adversarial_training,
-            adversarial_batching_method=self.adversarial_batching_method,
-            adversarial_with_feature_nodes=False,
-            batch_size=self.batch_size,
-            disc_node_num_per_batch=self.disc_node_num_per_batch,
-            label_smoothing=self.label_smoothing,
-            alpha=self.alpha,
-            loss_alpha=self.loss_alpha,
-            neg_sampling_mode=self.neg_sampling_mode,
-            loss_type=self.loss_type,
-            late_join_alpha=0,
-            late_join_loss_alpha=0,
-            patience=self.patience,
-            random_seed=self.random_seed,
-            std_loss_alpha=self.std_loss_alpha,
+        trainer_kwargs.update(
+            {
+                "lr": self.learning_rate * 0.1,
+                "adversarial_with_feature_nodes": False,
+                "late_join_alpha": 0,
+                "late_join_loss_alpha": 0,
+            }
         )
+        self.trainer_balanced = Trainer(**trainer_kwargs)
         self.trainer_balanced.train(
             graph=graph,
             num_neg_per_pos=self.num_neg_per_pos,

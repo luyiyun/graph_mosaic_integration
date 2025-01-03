@@ -4,6 +4,7 @@ from copy import deepcopy
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.optim import lr_scheduler as lrsch
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
@@ -92,6 +93,10 @@ class Trainer:
         device: str = "cuda" if torch.cuda.is_available() else "cpu",
         optimizer: Literal["adam", "rmsprop"] = "adam",
         lr: float = 0.001,
+        lr_scheduler: bool = True,
+        lr_scheduler_patience: int = 3,
+        early_stop: bool = True,
+        early_stop_patience: int = 5,
         neg_sample_in_batch: bool = False,
         adversarial_training: bool = True,
         adversarial_batching_method: Literal[
@@ -111,10 +116,23 @@ class Trainer:
         ] = "margin_ranking",
         late_join_loss_alpha: int | None = None,
         late_join_alpha: int | None = None,
-        patience: int | float = 5,  # inf or np.inf表示不使用早停
         random_seed: int | None = None,
         std_loss_alpha: float = 0.0,
     ):
+        if adversarial_with_feature_nodes:
+            raise NotImplementedError(
+                "adversarial_with_feature_nodes not implemented"
+            )
+        if (
+            lr_scheduler
+            and early_stop
+            and lr_scheduler_patience >= early_stop_patience
+        ):
+            raise ValueError(
+                "lr_scheduler_patience should be "
+                "smaller than early_stop_patience"
+            )
+
         self.device = torch.device(device)
         self.neg_sample_in_batch = neg_sample_in_batch
         self.adversarial_training = adversarial_training
@@ -130,11 +148,10 @@ class Trainer:
         self.late_join_alpha = late_join_alpha
         self.random_seed = random_seed
         self.std_loss_alpha = std_loss_alpha
-
-        if adversarial_with_feature_nodes:
-            raise NotImplementedError(
-                "adversarial_with_feature_nodes not implemented"
-            )
+        self.early_stop = early_stop
+        self.early_stop_patience = early_stop_patience
+        self.lr_scheduler = lr_scheduler
+        self.lr_scheduler_patience = lr_scheduler_patience
 
         # 初始化模型
         self.model = model.to(self.device)
@@ -146,6 +163,11 @@ class Trainer:
             self.optimizer = optim.RMSprop(self.model.parameters(), lr=lr)
         else:
             raise ValueError("optimizer should be 'adam' or 'rmsprop'")
+        if lr_scheduler:
+            self._lr_scheduler = lrsch.ReduceLROnPlateau(
+                self.optimizer, factor=0.5, patience=lr_scheduler_patience
+            )
+            self._last_lr = self._lr_scheduler._last_lr[0]
 
         # 初始化损失函数
         self.loss_type = loss_type
@@ -153,9 +175,8 @@ class Trainer:
 
         self._evaluator = Evaluator()
         self._loss_accumulator = LossAccumulator()
-        self._flag_use_early_stop = patience < inf and patience < np.inf
-        if self._flag_use_early_stop:
-            self._early_stopper = EarlyStopper(patience=patience)
+        if early_stop:
+            self._early_stopper = EarlyStopper(patience=early_stop_patience)
 
     def train_epoch(
         self,
@@ -294,25 +315,6 @@ class Trainer:
         eval_losses = []
         with logging_redirect_tqdm():
             for epoch in tqdm(range(num_epochs), desc="Epoch: "):
-                # 划分训练和验证集
-                # num_samples = edges.shape[0]
-                # indices = torch.randperm(num_samples)
-                # split_idx = int(num_samples * (1 - val_split))
-                # train_indices, val_indices = (
-                #     indices[:split_idx],
-                #     indices[split_idx:],
-                # )
-                # train_edges, eval_edges = (
-                #     edges[train_indices],
-                #     edges[val_indices],
-                # )
-                # train_edge_weights = (
-                #     edge_weights[train_indices] if self.use_weights else None
-                # )
-                # eval_edge_weights = (
-                #     edge_weights[val_indices] if self.use_weights else None
-                # )
-
                 # 训练阶段
                 self.train_epoch(
                     train_dataset,
@@ -344,9 +346,24 @@ class Trainer:
                         f"Epoch {epoch + 1}/{num_epochs}, Valid, "
                         + f"Eval Loss: {eval_loss:.4f}"
                     )
+                # 学习率衰减
+                if self.lr_scheduler:
+                    self._lr_scheduler.step(
+                        eval_loss
+                        if val_split is not None
+                        else train_losses["edge"]
+                    )
+                    last_lr = self._lr_scheduler._last_lr[0]
+                    if last_lr != self._last_lr:
+                        tqdm.write(
+                            f"Epoch {epoch + 1}/{num_epochs}, "
+                            f"Learning rate: {last_lr:.4f} -> "
+                            f"{self._last_lr:.4f}"
+                        )
+                        self._last_lr = last_lr
                 # 早停检查
                 # 如果有valid，则使用valid的loss进行早停，否则使用train的loss进行早停
-                if self._flag_use_early_stop and self._early_stopper.see(
+                if self.early_stop and self._early_stopper.see(
                     eval_loss
                     if val_split is not None
                     else train_losses["edge"],
