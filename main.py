@@ -10,13 +10,15 @@ from gmi import (
     plot_umap,
 )
 
-for i in [0]:
-    mdata_path = "/data/share_data/yuytest/gmi_data/muto.h5mu"
+for i in [0.04,0.04,0.04,0.04,0.04,0.05,0.05,0.05,0.05,0.05,0.06,0.06,0.06,0.06,0.06,0.07,0.07,0.07,0.07,0.07,0.09,0.09,0.09,0.09,0.09,0.1,0.1,0.1,0.1,0.1]:
+    mdata_path = "/data/share_data/yuytest/gmi_data/triple.h5mu"
     mdata = mu.read(mdata_path)
     result_path = f"./result/{datetime.now().strftime('%Y-%m-%d_%H-%M')}"
     # 获取完整的batch和标签，并保存在batch和标签列
+    print(mdata)
     mdata = data_infor_integrate(
         mdata,
+        
         feature_key="batch",
         saved_feature_name="batch",
         target_attr="obs",
@@ -32,23 +34,23 @@ for i in [0]:
         feature_key="lsi_pca",
         saved_feature_name="Unintegrated",
         target_attr="obsm",
-        dim_limit=100,
+        dim_limit=20,
     )
     batch_mapping = {category: idx + 1 for idx, category in enumerate(mdata.obs['batch'].cat.categories)}
     mdata.obs['batch'] = mdata.obs['batch'].map(batch_mapping)
     # import ipdb; ipdb.set_trace()
     num_neg_per_pos=4
     label_smoothing =0.1
-    alpha=0.05
-    loss_alpha=i
+    alpha=i
+    loss_alpha=0.2
     neg_sampling_mode = "matched"
-    adversartial_balance_weights=False
+    adversartial_balance_weights=True
 
     gmi_model = GraphMosaicIntegration(
         num_neg_per_pos=num_neg_per_pos,
-        label_smoothing=0.1,
-        alpha=0.05,
-        loss_alpha=0.1,
+        label_smoothing=label_smoothing,
+        alpha=alpha,
+        loss_alpha=loss_alpha,
         adversarial_training=True,
         adversarial_batching_method="divide",
         val_split=0.1,
@@ -56,14 +58,16 @@ for i in [0]:
         num_epochs=100,
         late_join_alpha=0,
         late_join_loss_alpha=0,
-        device="cuda:1",
-        adversartial_balance_weights=False,
+        device="cuda:0",
+        adversartial_balance_weights=adversartial_balance_weights,
         num_epochs_with_balanced_weights=20,
-        learning_rate=0.01,
+        learning_rate=0.003,
         add_batch_embedding=True,
-        bilinear=True,
+        bilinear=False,
     )
-    gmi_model.fit(mdata, batch_key="batch", feature_interaction_key="net")
+    gmi_model.fit(mdata, batch_key="batch", 
+                  feature_interaction_key="net"
+                  )
     gmi_model.save(result_path)
 
     plot_umap(

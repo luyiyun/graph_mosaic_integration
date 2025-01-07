@@ -13,6 +13,7 @@ import anndata as ad
 import numpy as np
 import scipy.sparse as sp
 from typing import Optional, List, Union
+from harmony import harmonize
 
 
 def data_infor_integrate(mdata: mu.MuData, feature_key: str,saved_feature_name:str, target_attr:str, dim_limit:int=None):
@@ -131,26 +132,26 @@ def run_benchmark(mdata,num_cell, result_dir):
     mdata =mdata
     mdata.obsm["GMI"] = embeddings.values[:num_cell,]
     print("Data loaded")
-
     adata = convert_mudata_to_anndata(
         mdata=mdata,
         sparse=True,
         fillna=0.0,
         obs=['label', 'batch'],          # 指定保留的 obs 列
-        obsm=['Unintegrated', 'GMI']  # 指定保留的 obsm 键
+        obsm=['GMI']#,"Unintegrated"]  # 指定保留的 obsm 键
     )
+    #adata.obsm["Harmony"] = harmonize(adata.obsm["Unintegrated"], adata.obs, batch_key="batch")
     bm = Benchmarker(
         adata,
         batch_key="batch",
         label_key="label",
         embedding_obsm_keys=[
-            "Unintegrated",
+            # "Unintegrated",
             # "GMI_full",
             # "GMI_bipartitle",
             # "GMI_matched",
             #"GMI_matched_add_feat_1",
             "GMI",
-            # "Harmony_pca",
+            #"Harmony",
         ],
         #pre_integrated_embedding_obsm_key="lsi_pca",
         n_jobs=-1,

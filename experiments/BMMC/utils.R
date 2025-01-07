@@ -1,4 +1,4 @@
-source("/data/share_data/yuytest/gmi_data/unprocessed/utils2.R")
+source("/home/yuyipei/graph_mosaic_integration/experiments/BMMC/utils2.R")
 library(Seurat)
 library(SeuratDisk)
 library(Signac)
@@ -22,73 +22,44 @@ options(future.seed = T)
 
 
 gen_atac <- function(frag_path, cells = NULL, min_cells = 5) {
-  # call peaks using fixed-width bins instead of MACS2
-  system(paste0("/home/yuyipei/download/tabix-0.2.6/tabix -f -p bed ", frag_path))
-  frags <- CreateFragmentObject(frag_path, cells = cells)
-  print('===============================================')
-  print('frags_import_create_fragments')
-  print('===============================================')
-  # 设置窗口大小和基因组
-  window_size <- 500 # 每个窗口500bp
-  genome_size <- 2.7e9 # 根据参考基因组设置大小
-  
-  # 加载基因组长度信息
-  library(GenomeInfoDb)
-  library(BSgenome.Hsapiens.UCSC.hg38)
-  seqlengths <- seqlengths(BSgenome.Hsapiens.UCSC.hg38)
-  print('===============================================')
-  print('create seqlength')
-  print('===============================================')
-  # 生成固定宽度的bins
-  bins <- tileGenome(
-    seqlengths = seqlengths,            # 使用hg38染色体长度信息
-    tilewidth = window_size,            # 每个窗口500bp
-    cut.last.tile.in.chrom = TRUE        # 确保窗口不越界
-  )
-  print('===============================================')
-  print('create bin')
-  print('===============================================')
-  # 创建Peak矩阵
-  atac_counts <- FeatureMatrix(
-    fragments = frags,
-    features = bins,
-    cells = NULL,
-    process_n = 6000,
-  )
-  print('===============================================')
-  print('create peak')
-  print('===============================================')
-  # 获取基因注释信息
-  annotation <- GetGRangesFromEnsDb(ensdb = EnsDb.Hsapiens.v86)
-  seqlevelsStyle(annotation) <- "UCSC"
-  genome(annotation) <- "hg38"
-  print('===============================================')
-  print('gene annotation')
-  print('===============================================')
-  # 创建ChromatinAssay并添加注释
-  atac_assay <- CreateChromatinAssay(
-    counts = atac_counts,
-    min.cells = min_cells,
-    genome = 'hg38',
-    fragments = frags,
-    annotation = annotation
-  )
-  print('===============================================')
-  print('create chromatinAssay')
-  print('===============================================')
-  # 创建Seurat对象
-  atac <- CreateSeuratObject(
-    counts = atac_assay,
-    assay = 'atac'
-  )
-  
-  # 计算QC指标
-  atac <- NucleosomeSignal(atac)
-  atac <- TSSEnrichment(atac)
-  
-  return(atac)
+    # call peaks using MACS2
+    system(paste0("tabix -f -p bed ", frag_path))
+    frags <- CreateFragmentObject(frag_path, cells = cells)
+    peaks <- CallPeaks(frags)
+    peaks@seqnames
+    # remove peaks on non-autosomes and in genomic blacklist regions
+    peaks <- keepStandardChromosomes(peaks, pruning.mode = "coarse")
+    peaks <- peaks[!(peaks@seqnames %in% c("chrX", "chrY"))]
+    peaks <- subsetByOverlaps(x = peaks, ranges = blacklist_hg38_unified, invert = TRUE)
+    # quantify counts in each peak
+    atac_counts <- FeatureMatrix(
+        fragments = frags,
+        features = peaks
+    )
+    # # add in the atac-seq data, only use peaks in standard chromosomes
+    # grange <- StringToGRanges(rownames(atac_counts))
+    # grange_use <- seqnames(grange) %in% standardChromosomes(grange)
+    # atac_counts <- atac_counts[as.vector(grange_use), ]
+    # get gene annotations for hg38
+    annotation <- GetGRangesFromEnsDb(ensdb = EnsDb.Hsapiens.v86)
+    seqlevelsStyle(annotation) <- "UCSC"
+    genome(annotation) <- "hg38"
+    # create atac assay and add it to the object
+    atac_assay <- CreateChromatinAssay(
+        counts = atac_counts,
+        min.cells = min_cells,
+        genome = 'hg38',
+        fragments = frags,
+        annotation = annotation
+    )
+    atac <- CreateSeuratObject(
+        counts = atac_assay,
+        assay = 'atac',
+    )
+    atac <- NucleosomeSignal(atac)
+    atac <- TSSEnrichment(atac)
+    return(atac)
 }
-
 
 
 gen_rna <- function(rna_counts, min_cells = 3) {
