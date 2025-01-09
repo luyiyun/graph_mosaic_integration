@@ -35,7 +35,9 @@ develop = [
     "seaborn",
     "scib_metrics",
     "colorcet",
-    # "harmony-py"
+    "harmony-pytorch",
+    "biothings_client",
+    "requests-cache",
 ]
 
 
