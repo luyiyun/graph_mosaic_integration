@@ -1,4 +1,5 @@
 .*
+!.gitignore
 data/
 result/
 *result*/  
@@ -9,4 +10,3 @@ build/
 *.png
 *.pdf
 test.py
-!.gitignore
