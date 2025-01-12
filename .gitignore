@@ -10,3 +10,7 @@ build/
 *.pdf
 test.py
 !.gitignore
+*.sqlite
+*.dill
+glue/
+glue_full/
