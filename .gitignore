@@ -1,5 +1,6 @@
 .*
 !.gitignore
+!.python-version
 data/
 result/
 *result*/  
@@ -9,4 +10,3 @@ build/
 *.ipynb
 *.png
 *.pdf
-test.py
