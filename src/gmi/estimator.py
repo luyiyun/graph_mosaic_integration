@@ -11,7 +11,7 @@ import numpy as np
 from scipy.sparse import csr_matrix, coo_matrix
 
 from .graph import MosaicDataGraph
-from .model import FullModel
+from .model import GMIModel
 from .trainer import Trainer
 
 
@@ -206,16 +206,21 @@ class GraphMosaicIntegration:
         )
 
     def fit_graph(self, graph: MosaicDataGraph):
-        self.model = FullModel(
+        self.model = GMIModel(
             num_nodes=graph.n_nodes,
             embedding_dim=self.embedding_dim,
-            num_batch=graph.n_batch,
-            hidden_dims=self.disc_hiddens,
+            disc_hidden_dims=self.disc_hiddens,
+            # num_batch=graph.n_batch,
             bn=self.disc_bn,
-            add_batch_embedding=self.add_batch_embedding,
-            n_cells=graph.n_cells,
             bilinear=self.bilinear,
+            num_cells=graph.n_cells,
             num_cluster=self.num_cluster,
+            cell_batch_ids=torch.tensor(
+                graph.nodes_df["group"].values[: graph.n_cells],
+                device=self.device,
+                dtype=torch.long,
+            ),
+            use_batch_embedding=self.add_batch_embedding,
             loss_type=self.loss_type,
         )
 
