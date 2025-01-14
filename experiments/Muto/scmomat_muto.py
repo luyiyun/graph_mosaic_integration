@@ -3,6 +3,7 @@ import os.path as osp
 from time import perf_counter
 from argparse import ArgumentParser
 from collections import defaultdict
+
 import numpy as np
 import scipy.sparse as sp
 import anndata as ad
@@ -20,9 +21,9 @@ from preprocess import merge_obs_from_all_modalities
 def main():
     parser = ArgumentParser()
     parser.add_argument("--preproc_data_dir", default="/data/share_data/yuytest/gmi_data/")
-    parser.add_argument("--preproc_data_name", default="muto")  # 更新为 muto 数据集
+    parser.add_argument("--preproc_data_name", default="muto")
     parser.add_argument("--results_dir", default="/home/yuyipei/graph_mosaic_integration/result")
-    parser.add_argument("--results_name", default="muto_comparison")  # 更新为 muto 数据集的结果名
+    parser.add_argument("--results_name", default="muto_comparison")
     parser.add_argument("--not_use_pseudo", action="store_true")
     parser.add_argument("--seeds", default=list(range(6)), type=int, nargs="+")
     parser.add_argument("--scmomat_device", default="cuda:0")
@@ -31,40 +32,48 @@ def main():
     )
     args = parser.parse_args()
 
-    # ========================================================================
-    # load preprocessed data
-    # ========================================================================
+    # Load preprocessed data
     print("-- load preprocessed data --")
-    mdata_fn = osp.join(
-        args.preproc_data_dir, f"{args.preproc_data_name}.h5mu"
-    )
+    mdata_fn = osp.join(args.preproc_data_dir, f"{args.preproc_data_name}.h5mu")
     os.makedirs(args.results_dir, exist_ok=True)
     mdata = md.read(mdata_fn)
-    mdata.mod['atac'].obs['batch'] = mdata.mod['atac'].obs['batch'].cat.codes+1
-    mdata.mod['rna'].obs['batch'] = mdata.mod['rna'].obs['batch'].cat.codes+6
+    
+    # Process batch columns in each modality
+    for mod_name in ['atac', 'rna']:
+        mdata.mod[mod_name].obs['batch'] = mdata.mod[mod_name].obs['batch'].cat.codes + (1 if mod_name == 'atac' else 6)
+    
+    # Merge observations across modalities
     merge_obs_from_all_modalities(mdata, key="cell_type")
+    
+    # Integrate data information
     mdata = data_infor_integrate(
         mdata,
         feature_key="batch",
         saved_feature_name="batch",
         target_attr="obs",
     )
-    mdata.obs['batch'] = mdata.obs['batch'].cat.codes+1
+    
+    # Recode batch as integer codes
+    mdata.obs['batch'] = mdata.obs['batch'].cat.codes + 1
     print(mdata)
     print(mdata.obs['batch'].value_counts())
 
-    # prepare the container to hold the results
-    res_adata = ad.AnnData(obs={"placeholder": np.arange(mdata.n_obs)})
-
-    # ========================================================================
-    # rearrange the data
-    # ========================================================================
+    # Rearrange the data by batches
     print("-- rearrange data --")
-    batch_name = "batch"  # 根据数据结构，你可以修改这个为"batch5"等
+    batch_name = "batch"
     
     batch_uni = mdata.obs[batch_name].unique()
     batch_uni.sort()
     nbatches = batch_uni.shape[0]
+
+    # Record cell indices in the order of batches
+    cell_indices = []
+    for bi in batch_uni:
+        idx = mdata.obs.index[mdata.obs[batch_name] == bi]
+        cell_indices.extend(idx.tolist())
+    
+    # Create res_adata with the correct observation order
+    res_adata = ad.AnnData(obs=mdata.obs.loc[cell_indices].copy())
 
     counts = {}
     for k, adat in mdata.mod.items():
@@ -80,16 +89,14 @@ def main():
     if not args.not_use_pseudo:
         net = mdata.varp["net"]
         atac_rna = net[mdata.varm["atac"], :][:, mdata.varm["rna"]].toarray()
-
+        
         for i, arr_rna in enumerate(counts["rna"]):
             if arr_rna is None:
                 arr_atac = counts["atac"][i]
                 if arr_atac is not None:
                     counts["rna"][i] = ((arr_atac @ atac_rna) != 0).astype(int)
 
-    # ========================================================================
-    # running scmomat
-    # ========================================================================
+    # Running scmomat
     if "scmomat" in args.methods:
         print("-- scmomat: preprocessing --")
         counts_scmomat = defaultdict(list)
@@ -98,22 +105,20 @@ def main():
                 if dati is None:
                     counts_scmomat[k].append(None)
                     continue
-
+                
                 if sp.issparse(dati):
                     dati = dati.toarray()
                 if k == "atac":
                     dati = scmomat.preprocess(dati, modality="ATAC")
                 else:
-                    dati = scmomat.preprocess(
-                        dati, modality="RNA", log=True
-                    )
+                    dati = scmomat.preprocess(dati, modality="RNA", log=True)
                 counts_scmomat[k].append(dati)
-
+        
         counts_scmomat["nbatches"] = nbatches
         counts_scmomat["feats_name"] = {
             k: adati.var.index.values for k, adati in mdata.mod.items()
         }
-
+        
         print("-- scmomat: modeling --")
         res_timing = []
         for seedi in args.seeds:
@@ -132,15 +137,17 @@ def main():
             model.train_func(T=4000)
             end_time = perf_counter()
             res_timing.append((seedi, end_time - start_time))
-
+            
             zs = model.extract_cell_factors()
-            res_adata.obsm[f"scMoMaT_s{seedi}"] = np.concatenate(zs)
-
+            latent_embeddings = np.concatenate(zs, axis=0)
+            res_adata.obsm[f"scMoMaT_s{seedi}"] = latent_embeddings
+            
+            # Assertion to check data integrity
+            assert latent_embeddings.shape[0] == res_adata.n_obs, "Mismatch in number of cells"
+        
         res_adata.uns["timing"] = {"scMoMaT": res_timing}
-
-    # ========================================================================
-    # save the results
-    # ========================================================================
+    
+    # Save the results
     print("-- save the results --")
     res_adata.write(osp.join(args.results_dir, f"{args.results_name}.h5ad"))
 

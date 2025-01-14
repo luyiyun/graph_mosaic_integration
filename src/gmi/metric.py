@@ -123,21 +123,23 @@ def convert_mudata_to_anndata(
 
 
 
-def run_benchmark(mdata,num_cell, result_dir,algorism="GMI"):
+def run_benchmark(mdata,num_cell, result_dir,algorithm="GMI"):
     # 数据读取
     embedding_path = os.path.join(result_dir, "final_embeddings.csv")
     if os.path.exists(embedding_path):
         embeddings = pd.read_csv(embedding_path, index_col=0)
 
     mdata =mdata
-    mdata.obsm[algorism] = embeddings.values[:num_cell,]
-    print("Data loaded")
+    if algorithm == 'GMI':
+        mdata.obsm[algorithm] = embeddings.values[:num_cell,]
+        print("GMI Data loaded")
+
     adata = convert_mudata_to_anndata(
         mdata=mdata,
         sparse=True,
         fillna=0.0,
         obs=['label', 'batch'],          # 指定保留的 obs 列
-        obsm=[algorism]#,"Unintegrated"]  # 指定保留的 obsm 键
+        obsm=[algorithm]#,"Unintegrated"]  # 指定保留的 obsm 键
     )
     #adata.obsm["Harmony"] = harmonize(adata.obsm["Unintegrated"], adata.obs, batch_key="batch")
     bm = Benchmarker(
@@ -150,7 +152,7 @@ def run_benchmark(mdata,num_cell, result_dir,algorism="GMI"):
             # "GMI_bipartitle",
             # "GMI_matched",
             #"GMI_matched_add_feat_1",
-            algorism,
+            algorithm,
             #"Harmony",
         ],
         #pre_integrated_embedding_obsm_key="lsi_pca",
@@ -158,7 +160,8 @@ def run_benchmark(mdata,num_cell, result_dir,algorism="GMI"):
         bio_conservation_metrics=BioConservation(nmi_ari_cluster_labels_kmeans=False,nmi_ari_cluster_labels_leiden=True,)
     )
     bm.benchmark()
-    bm.plot_results_table(min_max_scale=False, save_dir=f"{result_dir}")
+    if algorithm == 'GMI':
+        bm.plot_results_table(min_max_scale=False, save_dir=f"{result_dir}")
 
     # 打印详细的结果数据框
     df = bm.get_results(min_max_scale=False)

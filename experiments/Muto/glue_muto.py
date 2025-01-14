@@ -73,8 +73,7 @@ rna.varm["X_glue"] = feature_embeddings.reindex(rna.var_names).to_numpy()
 atac.varm["X_glue"] = feature_embeddings.reindex(atac.var_names).to_numpy()
 
 
-mdata.mod['rna']=rna
-mdata.mod['atac']=atac
-import ipdb;ipdb.set_trace()
+combined.write(os.path.join(result_path, "glue_muto_embedding.h5ad"))
+
 
 

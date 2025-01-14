@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import anndata as ad
 import networkx as nx
@@ -15,7 +16,7 @@ from gmi import (
 )
 
 
-mdata_path = "/data/share_data/yuytest/gmi_data/mop.h5mu"
+mdata_path = "/data/share_data/yuytest/gmi_data/MOP.h5mu"
 mdata = mu.read(mdata_path)
 result_path = f"./result/{datetime.now().strftime('%Y-%m-%d_%H-%M')}"
 
@@ -32,7 +33,6 @@ atac = mdata.mod['atac']
 
 
 guidance = scglue.genomics.rna_anchored_guidance_graph(rna, atac)
-
 scglue.graph.check_graph(guidance, [rna, atac])
 
 scglue.models.configure_dataset(
@@ -73,8 +73,5 @@ rna.varm["X_glue"] = feature_embeddings.reindex(rna.var_names).to_numpy()
 atac.varm["X_glue"] = feature_embeddings.reindex(atac.var_names).to_numpy()
 
 
-mdata.mod['rna']=rna
-mdata.mod['atac']=atac
-import ipdb;ipdb.set_trace()
-
+combined.write(os.path.join(result_path, "glue_mop_embedding.h5ad"))
 

@@ -35,7 +35,7 @@ def main():
     os.makedirs(args.results_dir, exist_ok=True)
     mdata = md.read(mdata_fn)
     for mod_name, adat in mdata.mod.items():
-        if 'batch' in adat.obs.columns:  # 确保该模态中有 batch 列
+        if 'batch' in adat.obs.columns:  # Ensure the modality has a 'batch' column
             print(f"Processing batch for modality: {mod_name}")
             adat.obs['batch'] = adat.obs['batch'].str.extract(r'(\d+)').astype(int)
 
@@ -43,11 +43,9 @@ def main():
     merge_obs_from_all_modalities(mdata, key="batch")
     merge_obs_from_all_modalities(mdata, key="cell_type")  # Update key if needed
     
-    mdata.obs['batch'] = mdata.obs['batch'].cat.codes+1
+    mdata.obs['batch'] = mdata.obs['batch'].cat.codes + 1
     print(mdata)
     print(mdata.obs['batch'])
-    # prepare the container to hold the results
-    res_adata = ad.AnnData(obs={"placeholder": np.arange(mdata.n_obs)})
 
     # ========================================================================
     # rearrange the data
@@ -58,6 +56,15 @@ def main():
     batch_uni = mdata.obs[batch_name].unique()
     batch_uni.sort()
     nbatches = batch_uni.shape[0]
+
+    # Record cell indices in the order of batches
+    cell_indices = []
+    for bi in batch_uni:
+        idx = mdata.obs.index[mdata.obs[batch_name] == bi]
+        cell_indices.extend(idx.tolist())
+
+    # Create res_adata with the correct observation order
+    res_adata = ad.AnnData(obs=mdata.obs.loc[cell_indices].copy())
 
     counts = {}
     for k, adat in mdata.mod.items():
@@ -129,7 +136,11 @@ def main():
             res_timing.append((seedi, end_time - start_time))
 
             zs = model.extract_cell_factors()
-            res_adata.obsm[f"scMoMaT_s{seedi}"] = np.concatenate(zs)
+            latent_embeddings = np.concatenate(zs, axis=0)
+            res_adata.obsm[f"scMoMaT_s{seedi}"] = latent_embeddings
+
+            # Assertion to check data integrity
+            assert latent_embeddings.shape[0] == res_adata.n_obs, "Mismatch in number of cells"
 
         res_adata.uns["timing"] = {"scMoMaT": res_timing}
 

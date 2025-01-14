@@ -13,9 +13,7 @@ import scmomat
 import sys
 sys.path.append(os.path.abspath("src/gmi/mmAAVI"))
 
-
 from preprocess import merge_obs_from_all_modalities
-
 
 def main():
     parser = ArgumentParser()
@@ -34,7 +32,7 @@ def main():
     # ========================================================================
     # load preprocessed data
     # ========================================================================
-    print("-- load prprocessed data --")
+    print("-- load preprocessed data --")
     mdata_fn = osp.join(
         args.preproc_data_dir, f"{args.preproc_data_name}.h5mu"
     )
@@ -44,9 +42,6 @@ def main():
     merge_obs_from_all_modalities(mdata, key="coarse_cluster")
     merge_obs_from_all_modalities(mdata, key="batch")
     print(mdata)
-
-    # prepare the container to hold the results
-    res_adata = ad.AnnData(obs={"placeholder": np.arange(mdata.n_obs)})
 
     # ========================================================================
     # rearrange the data
@@ -58,12 +53,20 @@ def main():
     batch_uni.sort()
     nbatches = batch_uni.shape[0]
 
+    # Record cell indices per batch
+    cell_indices = []
+    for bi in batch_uni:
+        idx = mdata.obs.index[mdata.obs[batch_name] == bi]
+        cell_indices.extend(idx.tolist())
+
+    # Prepare the container to hold the results with correct order
+    res_adata = ad.AnnData(obs=mdata.obs.loc[cell_indices].copy())
+
     counts = {}
     for k, adat in mdata.mod.items():
-        batch_uni_k = adat.obs[batch_name].unique()
         counts_k = []
         for bi in batch_uni:
-            if bi in batch_uni_k:
+            if bi in adat.obs[batch_name].unique():
                 counts_k.append(adat.X[adat.obs[batch_name] == bi, :])
             else:
                 counts_k.append(None)
@@ -126,15 +129,17 @@ def main():
             res_timing.append((seedi, end_time - start_time))
 
             zs = model.extract_cell_factors()
-            res_adata.obsm[f"scMoMaT_s{seedi}"] = np.concatenate(zs)
+            latent_embeddings = np.concatenate(zs, axis=0)
+            res_adata.obsm[f"scMoMaT_s{seedi}"] = latent_embeddings
 
         res_adata.uns["timing"] = {"scMoMaT": res_timing}
-
+    
     # ========================================================================
     # save the results
     # ========================================================================
     print("-- save the results --")
     res_adata.write(osp.join(args.results_dir, f"{args.results_name}.h5ad"))
+    print(res_adata)
 
 if __name__ == "__main__":
     main()

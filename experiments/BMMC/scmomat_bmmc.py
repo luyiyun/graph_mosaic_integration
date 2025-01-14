@@ -11,9 +11,7 @@ import mudata as md
 import scanpy as sc
 import scmomat
 import sys
-from gmi import (
-    data_infor_integrate,
-)
+from gmi import data_infor_integrate
 
 def main():
     parser = ArgumentParser()
@@ -31,13 +29,12 @@ def main():
     # load preprocessed data
     # ========================================================================
     print("-- load preprocessed data --")
-    mdata_fn = osp.join(
-        args.preproc_data_dir, f"{args.preproc_data_name}.h5mu"
-    )
+    mdata_fn = osp.join(args.preproc_data_dir, f"{args.preproc_data_name}.h5mu")
     os.makedirs(args.results_dir, exist_ok=True)
     mdata = md.read(mdata_fn)
     net = mdata.varp['net']
 
+    # 移除不符合条件的细胞
     cells_to_remove = mdata.obs[
         (mdata.obs['rna:batch'] == 2) & (mdata.obs['adt:batch'] == 1)
     ].index
@@ -46,30 +43,19 @@ def main():
         module_cells = mdata.mod[mod].obs.index
         valid_cells = module_cells.intersection(cells_to_keep)
         mdata.mod[mod] = mdata.mod[mod][valid_cells, :]  # 保留交集细胞
+
+    # 重新构建 MuData 对象
     mdata = md.MuData({"rna": mdata.mod['rna'], "atac": mdata.mod['atac'], "adt": mdata.mod['adt']})
     mdata.varp['net'] = net
-    mdata = data_infor_integrate(
-        mdata,
-        feature_key="label",
-        saved_feature_name="label",
-        target_attr="obs",
-    )
 
+    # 整合标签和批次信息
+    mdata = data_infor_integrate(mdata, feature_key="label", saved_feature_name="label", target_attr="obs")
     for mod in ['rna', 'atac', 'adt']:
         batch_series = mdata.mod[mod].obs['batch']
         mdata.mod[mod].obs['batch'] = pd.to_numeric(batch_series, errors='coerce').astype('Int64')
-
-    mdata = data_infor_integrate(
-        mdata,
-        feature_key="batch",
-        saved_feature_name="batch",
-        target_attr="obs",
-    )
-    mdata.obs['batch']=mdata.obs['batch'].astype(int)
+    mdata = data_infor_integrate(mdata, feature_key="batch", saved_feature_name="batch", target_attr="obs")
+    mdata.obs['batch'] = mdata.obs['batch'].astype(int)
     print(mdata)
-
-    # prepare the container to hold the results
-    res_adata = ad.AnnData(obs={"placeholder": np.arange(mdata.n_obs)})
 
     # ========================================================================
     # rearrange the data
@@ -77,10 +63,21 @@ def main():
     print("-- rearrange data --")
     batch_name = "batch"
 
+    # 获取唯一的批次并排序
     batch_uni = mdata.obs[batch_name].unique()
     batch_uni.sort()
     nbatches = batch_uni.shape[0]
 
+    # 记录每个批次的细胞索引
+    cell_indices = []
+    for bi in batch_uni:
+        idx = mdata.obs.index[mdata.obs[batch_name] == bi]
+        cell_indices.extend(idx.tolist())
+
+    # 使用记录的细胞索引初始化 res_adata
+    res_adata = ad.AnnData(obs=mdata.obs.loc[cell_indices].copy())
+
+    # 按批次重新排列数据
     counts = {}
     for k, adat in mdata.mod.items():
         batch_uni_k = adat.obs[batch_name].unique()
@@ -92,6 +89,7 @@ def main():
                 counts_k.append(None)
         counts[k] = counts_k
 
+    # 如果需要生成伪数据
     if not args.not_use_pseudo:
         net = mdata.varp["net"]
         atac_rna = net[mdata.varm["atac"], :][:, mdata.varm["rna"]].toarray()
@@ -148,8 +146,13 @@ def main():
             end_time = perf_counter()
             res_timing.append((seedi, end_time - start_time))
 
+            # 提取潜在表示
             zs = model.extract_cell_factors()
-            res_adata.obsm[f"scMoMaT_s{seedi}"] = np.concatenate(zs)
+            latent_embeddings = np.concatenate(zs, axis=0)
+            res_adata.obsm[f"scMoMaT_s{seedi}"] = latent_embeddings
+
+            # 验证数据一致性
+            assert latent_embeddings.shape[0] == res_adata.n_obs, "潜在表示与观测数据行数不一致"
 
         res_adata.uns["timing"] = {"scMoMaT": res_timing}
 
