@@ -10,7 +10,7 @@ from gmi import (
     plot_umap,
 )
 
-for i in [0.04,0.04,0.04,0.04,0.04,0.05,0.05,0.05,0.05,0.05,0.06,0.06,0.06,0.06,0.06,0.07,0.07,0.07,0.07,0.07,0.09,0.09,0.09,0.09,0.09,0.1,0.1,0.1,0.1,0.1]:
+for i in [0.04]:
     mdata_path = "/data/share_data/yuytest/gmi_data/triple.h5mu"
     mdata = mu.read(mdata_path)
     result_path = f"./result/{datetime.now().strftime('%Y-%m-%d_%H-%M')}"

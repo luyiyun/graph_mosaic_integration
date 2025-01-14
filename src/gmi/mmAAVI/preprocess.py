@@ -8,8 +8,8 @@ from sklearn.utils.extmath import randomized_svd
 from sklearn.decomposition import PCA
 from mudata import MuData
 
-from . import typehint as typ
-from .utils import merge_multi_obs_cols
+import typehint as typ
+from utils import merge_multi_obs_cols
 
 
 def log1p_norm(dat: Tuple[np.ndarray, sp.csr_matrix]) -> np.ndarray:
@@ -49,7 +49,7 @@ def tfidf(
         return tf * idf
 
 
-def lsi(dat: typ.DATA_ELEM, n_components: int = 20, **kwargs) -> np.ndarray:
+def lsi(dat, n_components: int = 20, **kwargs) -> np.ndarray:
     r"""
     LSI analysis (following the Seurat v3 approach)
 
@@ -76,7 +76,7 @@ def lsi(dat: typ.DATA_ELEM, n_components: int = 20, **kwargs) -> np.ndarray:
     return X_lsi
 
 
-def pca(dat: typ.DATA_ELEM, n_components: int = 20, **kwargs) -> np.ndarray:
+def pca(dat, n_components: int = 20, **kwargs) -> np.ndarray:
     res = PCA(n_components, **kwargs).fit_transform(dat)
     return res
 

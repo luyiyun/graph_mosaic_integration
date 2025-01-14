@@ -12,3 +12,8 @@ build/
 *.png
 *.pdf
 *.h5mu
+
+*.sqlite
+*.dill
+glue/
+glue_full/

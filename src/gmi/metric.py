@@ -132,21 +132,24 @@ def convert_mudata_to_anndata(
     return adata
 
 
-def run_benchmark(mdata, num_cell, result_dir):
+
+def run_benchmark(mdata,num_cell, result_dir,algorithm="GMI"):
     # 数据读取
     embedding_path = os.path.join(result_dir, "final_embeddings.csv")
     if os.path.exists(embedding_path):
         embeddings = pd.read_csv(embedding_path, index_col=0)
 
-    mdata = mdata
-    mdata.obsm["GMI"] = embeddings.values[:num_cell,]
-    print("Data loaded")
+    mdata =mdata
+    if algorithm == 'GMI':
+        mdata.obsm[algorithm] = embeddings.values[:num_cell,]
+        print("GMI Data loaded")
+
     adata = convert_mudata_to_anndata(
         mdata=mdata,
         sparse=True,
         fillna=0.0,
-        obs=["label", "batch"],  # 指定保留的 obs 列
-        obsm=["GMI"],  # ,"Unintegrated"]  # 指定保留的 obsm 键
+        obs=['label', 'batch'],          # 指定保留的 obs 列
+        obsm=[algorithm]#,"Unintegrated"]  # 指定保留的 obsm 键
     )
     # adata.obsm["Harmony"] = harmonize(adata.obsm["Unintegrated"], adata.obs, batch_key="batch")
     bm = Benchmarker(
@@ -158,9 +161,9 @@ def run_benchmark(mdata, num_cell, result_dir):
             # "GMI_full",
             # "GMI_bipartitle",
             # "GMI_matched",
-            # "GMI_matched_add_feat_1",
-            "GMI",
-            # "Harmony",
+            #"GMI_matched_add_feat_1",
+            algorithm,
+            #"Harmony",
         ],
         # pre_integrated_embedding_obsm_key="lsi_pca",
         n_jobs=-1,
@@ -170,7 +173,8 @@ def run_benchmark(mdata, num_cell, result_dir):
         ),
     )
     bm.benchmark()
-    bm.plot_results_table(min_max_scale=False, save_dir=f"{result_dir}")
+    if algorithm == 'GMI':
+        bm.plot_results_table(min_max_scale=False, save_dir=f"{result_dir}")
 
     # 打印详细的结果数据框
     df = bm.get_results(min_max_scale=False)
