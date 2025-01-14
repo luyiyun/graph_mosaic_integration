@@ -390,10 +390,10 @@ def main():
     logging.basicConfig(
         format="[%(name)s][%(asctime)s][%(levelname)s] %(message)s",
     )
-    logger = logging.getLogger("gmi.balance_weights")
-    logger.setLevel(logging.INFO)
+    # logger = logging.getLogger("gmi.balance_weights")
+    # logger.setLevel(logging.INFO)
 
-    mdata = mu.read("./data/pbmc.h5mu")
+    mdata = mu.read("./res/pbmc.h5mu")
     mdata.obs["batch"] = (
         mdata.mod["protein"].obs["batch"].loc[mdata.obs_names].astype("category")
     )
@@ -406,7 +406,7 @@ def main():
     mdata.obs["cluster"] = (
         mdata.mod["protein"].obs["cluster"].loc[mdata.obs_names].astype("category")
     )
-    result_path = f"./result/{datetime.now().strftime('%Y-%m-%d_%H-%M')}"
+    result_path = f"./res/{datetime.now().strftime('%Y-%m-%d_%H-%M')}"
     # result_path = "./result/2024-12-21_15-59"
 
     if osp.exists(result_path):
@@ -443,24 +443,24 @@ def main():
         gmi_model.save(result_path)
         gmi_model.plot_losses(osp.join(result_path, "losses.png"))
 
-        if gmi_model.adversartial_balance_weights:
-            mdata.obs["weights"] = gmi_model.graph.nodes_adversarial_weights
-        else:
-            mdata.obs["weights"] = gmi_model.trainer.estimate_balance_weights()
-
+        # if gmi_model.adversartial_balance_weights:
+        #     mdata.obs["weights"] = gmi_model.graph.nodes_adversarial_weights
+        # else:
+        #     mdata.obs["weights"] = gmi_model.trainer.estimate_balance_weights()
+        #
         mdata.obsm["gmi"] = gmi_model.embeddings[: mdata.n_obs].detach().cpu().numpy()
 
-        fg = sns.displot(mdata.obs["weights"], kde=True, rug=True)
-        fg.savefig(osp.join(result_path, "weights_dist.png"))
+        # fg = sns.displot(mdata.obs["weights"], kde=True, rug=True)
+        # fg.savefig(osp.join(result_path, "weights_dist.png"))
 
         sc.pp.neighbors(mdata, use_rep="gmi")
         sc.tl.umap(mdata)
         fig = sc.pl.umap(
             mdata,
-            color=["batch", "coarse_cluster", "cluster", "weights"],
+            color=["batch", "coarse_cluster", "cluster"],
             show=False,
             return_fig=True,
-            ncols=2,
+            ncols=3,
         )
         fig.savefig(osp.join(result_path, "umap.png"))
 
@@ -495,4 +495,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    # test_balance_weights()

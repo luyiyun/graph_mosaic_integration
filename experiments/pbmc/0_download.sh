@@ -5,21 +5,20 @@ mkdir -p $save_dir
 
 files=("genes.txt" "proteins.txt" "regions.txt" "GxR.npz")
 # 使用循环迭代，添加元素到数组
-for ((i=1; i<3; i++))
-do
-    files+=("GxC$i.npz")
+for ((i = 1; i < 3; i++)); do
+  files+=("GxC$i.npz")
 done
-for ((i=3; i<5; i++))
-do
-    files+=("RxC$i.npz")
+for ((i = 3; i < 5; i++)); do
+  files+=("RxC$i.npz")
 done
-for ((i=1; i<5; i++))
-do
-    files+=("PxC$i.npz")
-    files+=("meta_c$i.csv")
+for ((i = 1; i < 5; i++)); do
+  files+=("PxC$i.npz")
+  files+=("meta_c$i.csv")
 done
 
-for filei in "${files[@]}"
-do
-    wget -O ${save_dir}/${filei} ${url_pre}${filei}
+for filei in "${files[@]}"; do
+  wget -O ${save_dir}/${filei} ${url_pre}${filei}
 done
+
+wget -O "https://raw.githubusercontent.com/luyiyun/mmAAVI/refs/heads/main/experiments/PBMC/data/proteins_alias.txt" "${save_dir}/proteins_alias.txt"
+

@@ -54,6 +54,18 @@ wheels = [
 ]
 
 [[package]]
+name = "anysqlite"
+version = "0.0.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/0f/4b/cd5d66b9f87e773bc71344a368b9472987e33514e6627e28342b9c3e7c43/anysqlite-0.0.5.tar.gz", hash = "sha256:9dfcf87baf6b93426ad1d9118088c41dbf24ef01b445eea4a5d486bac2755cce", size = 3432 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0b/31/349eae2bc9d9331dd8951684cf94528d91efaa71129dc30822ac111dfc66/anysqlite-0.0.5-py3-none-any.whl", hash = "sha256:cb345dc4f76f6b37f768d7a0b3e9cf5c700dfcb7a6356af8ab46a11f666edbe7", size = 3907 },
+]
+
+[[package]]
 name = "array-api-compat"
 version = "1.10.0"
 source = { registry = "https://pypi.org/simple" }
@@ -90,6 +102,12 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/a8/36/98fa1dad2f099205232f1941253f95996c7538e79e5b947e0353743116a1/biothings_client-0.4.0.tar.gz", hash = "sha256:0795d4181fa4850ba4688113d28233b37709e560a5b0cfb83a4ff07a715e969c", size = 53629 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e8/c4/64ddf9b11d8fa0cc3d8f95beea5679d26841e72166cc3573a9fb44ad4cf9/biothings_client-0.4.0-py3-none-any.whl", hash = "sha256:1d1178f7cc95c6926babbd3bbddf915921fba43fbd7109a33d31d4451354c6a9", size = 44910 },
+]
+
+[package.optional-dependencies]
+caching = [
+    { name = "anysqlite" },
+    { name = "hishel", extra = ["sqlite"] },
 ]
 
 [[package]]
@@ -455,6 +473,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "anndata" },
+    { name = "biothings-client", extra = ["caching"] },
     { name = "h5py" },
     { name = "matplotlib" },
     { name = "mudata" },
@@ -484,6 +503,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "anndata", specifier = ">=0.11.3" },
+    { name = "biothings-client", extras = ["caching"], specifier = ">=0.4.0" },
     { name = "h5py", specifier = ">=3.12.1" },
     { name = "matplotlib", specifier = ">=3.10.0" },
     { name = "mudata", specifier = ">=0.3.1" },
@@ -547,6 +567,23 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/8a/4f/b74332f313bfbe94ba03fff784219b9db385e6139708e55b11490149f90a/h5py-3.12.1-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:d3e465aee0ec353949f0f46bf6c6f9790a2006af896cee7c178a8c3e5090aa32", size = 5154390 },
     { url = "https://files.pythonhosted.org/packages/1a/57/93ea9e10a6457ea8d3b867207deb29a527e966a08a84c57ffd954e32152a/h5py-3.12.1-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:ba51c0c5e029bb5420a343586ff79d56e7455d496d18a30309616fdbeed1068f", size = 5378244 },
     { url = "https://files.pythonhosted.org/packages/50/51/0bbf3663062b2eeee78aa51da71e065f8a0a6e3cb950cc7020b4444999e6/h5py-3.12.1-cp313-cp313-win_amd64.whl", hash = "sha256:52ab036c6c97055b85b2a242cb540ff9590bacfda0c03dd0cf0661b311f522f8", size = 2979760 },
+]
+
+[[package]]
+name = "hishel"
+version = "0.1.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/10/b9/d7328c8507e45e27784e9c1f440c2b900ae1e60a980480d869b6c0b2553c/hishel-0.1.1.tar.gz", hash = "sha256:1f6421b78cc23fc43c610f651b7848c9b8eee2d29551d64a2ab0d45b319b6559", size = 35615 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cb/e9/93174034316943513a372e1b92d9ee2394973a63d2a99d6ca6432511eca3/hishel-0.1.1-py3-none-any.whl", hash = "sha256:5b51acc340303faeef2f5cfc1658acb1db1fdc3e3ad76406265a485f9707c5d6", size = 41852 },
+]
+
+[package.optional-dependencies]
+sqlite = [
+    { name = "anysqlite" },
 ]
 
 [[package]]

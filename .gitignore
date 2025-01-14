@@ -3,6 +3,7 @@
 !.python-version
 data/
 result/
+res/
 *result*/  
 build/
 **/*.egg-info/
@@ -10,3 +11,4 @@ build/
 *.ipynb
 *.png
 *.pdf
+*.h5mu

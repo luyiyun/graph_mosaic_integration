@@ -22,6 +22,7 @@ version = "0.1.0"
 # dynamic = ["version"]
 dependencies = [
     "anndata>=0.11.3",
+    "biothings-client[caching]>=0.4.0",
     "h5py>=3.12.1",
     "matplotlib>=3.10.0",
     "mudata>=0.3.1",
