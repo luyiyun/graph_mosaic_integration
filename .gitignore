@@ -1,6 +1,9 @@
 .*
+!.gitignore
+!.python-version
 data/
 result/
+res/
 *result*/  
 build/
 **/*.egg-info/
@@ -8,8 +11,8 @@ build/
 *.ipynb
 *.png
 *.pdf
-test.py
-!.gitignore
+*.h5mu
+
 *.sqlite
 *.dill
 glue/

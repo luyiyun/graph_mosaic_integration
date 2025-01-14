@@ -47,9 +47,7 @@ class GraphMosaicIntegration:
     device: str = "cuda"
     optimizer: Literal["adam", "rmsprop"] = "adam"
     adversarial_training: bool = True
-    adversarial_batching_method: Literal["unique", "divide", "random"] = (
-        "divide"
-    )
+    adversarial_batching_method: Literal["unique", "divide", "random"] = "divide"
     adversartial_balance_weights: bool = False
     num_epochs_with_balanced_weights: int = 50
     disc_node_num_per_batch: int = 200
@@ -57,13 +55,16 @@ class GraphMosaicIntegration:
     alpha: float = 0.1
     loss_alpha: float = 0.2
     neg_sampling_mode: Literal["full", "matched", "bipartitle"] = "matched"
-    loss_type: Literal["margin_ranking, weighted_softmax"] = "weighted_softmax"
+    loss_type: Literal["margin_ranking", "weighted_softmax"] = "weighted_softmax"
     late_join_loss_alpha: int = 5
     late_join_alpha: int = 5
     patience: int | float = 5  # inf or np.inf表示不使用早停
     random_seed: int = 0
-    std_loss_alpha: float = 0.0
+    # std_loss_alpha: float = 0.0
     bilinear: bool = False
+    num_cluster: int | None = None
+    clu_loss_weight: float = 0.1
+    late_join_clu_weight: int = 100
 
     def fit(
         self,
@@ -130,9 +131,7 @@ class GraphMosaicIntegration:
             # 获取表达矩阵
             expression_matrix = adata_mod.X
             if log_norm:
-                expression_matrix = log_transform_and_normalize(
-                    expression_matrix
-                )
+                expression_matrix = log_transform_and_normalize(expression_matrix)
             expression_matrix = coo_matrix(expression_matrix)
             row_indices, col_indices, expression_values = (
                 expression_matrix.row,
@@ -153,12 +152,8 @@ class GraphMosaicIntegration:
             # expression_values = np.asarray(expression_values).flatten()
 
             # 将细胞和特征映射到全局索引表中的序列号
-            mapped_batches = nodes_df.loc[
-                cell_indices[row_indices], "idx"
-            ].values
-            mapped_features = nodes_df.loc[
-                feature_indices[col_indices], "idx"
-            ].values
+            mapped_batches = nodes_df.loc[cell_indices[row_indices], "idx"].values
+            mapped_features = nodes_df.loc[feature_indices[col_indices], "idx"].values
 
             # 创建临时 DataFrame
             edge_df = pd.DataFrame(
@@ -172,9 +167,7 @@ class GraphMosaicIntegration:
 
         main_edges_df = pd.concat(main_edges_df, ignore_index=True)
         main_edges = main_edges_df[["src", "dst"]].values
-        main_edges_group = np.unique(
-            nodes_df["group"].values[main_edges], axis=0
-        )
+        main_edges_group = np.unique(nodes_df["group"].values[main_edges], axis=0)
 
         if feature_interaction_key is not None:
             net = mdata.varp[feature_interaction_key]
@@ -195,9 +188,7 @@ class GraphMosaicIntegration:
                 }
             )
             feat_edges = feat_edges_df[["src", "dst"]].values
-            feat_edges_group = np.unique(
-                nodes_df["group"].values[feat_edges], axis=0
-            )
+            feat_edges_group = np.unique(nodes_df["group"].values[feat_edges], axis=0)
         else:
             feat_edges_df, feat_edges_group = None, None
         return MosaicDataGraph(
@@ -224,9 +215,17 @@ class GraphMosaicIntegration:
             add_batch_embedding=self.add_batch_embedding,
             n_cells=graph.n_cells,
             bilinear=self.bilinear,
+            num_cluster=self.num_cluster,
+            loss_type=self.loss_type,
         )
 
         # 初始化训练器
+        alpha = np.zeros(self.num_epochs)
+        alpha[self.late_join_alpha :] = self.alpha
+        loss_alpha = np.zeros(self.num_epochs)
+        loss_alpha[self.late_join_loss_alpha :] = self.loss_alpha
+        loss_clu_weight = np.zeros(self.num_epochs)
+        loss_clu_weight[self.late_join_clu_weight :] = self.clu_loss_weight
         self.trainer = Trainer(
             model=self.model,
             device=self.device,
@@ -239,15 +238,13 @@ class GraphMosaicIntegration:
             batch_size=self.batch_size,
             disc_node_num_per_batch=self.disc_node_num_per_batch,
             label_smoothing=self.label_smoothing,
-            alpha=self.alpha,
-            loss_alpha=self.loss_alpha,
             neg_sampling_mode=self.neg_sampling_mode,
             loss_type=self.loss_type,
-            late_join_alpha=self.late_join_alpha,
-            late_join_loss_alpha=self.late_join_loss_alpha,
             patience=self.patience,
             random_seed=self.random_seed,
-            std_loss_alpha=self.std_loss_alpha,
+            grad_reverse_weight=alpha,
+            cls_loss_weight=loss_alpha,
+            clu_loss_weight=loss_clu_weight,
         )
 
         self.trainer.train(
@@ -307,9 +304,7 @@ class GraphMosaicIntegration:
         )
         embed_df.to_csv(osp.join(path, "final_embeddings.csv"))
 
-        pd.DataFrame(self.trainer.all_losses).to_csv(
-            os.path.join(path, "all_losses.csv")
-        )
+        self.trainer.all_losses.to_csv(os.path.join(path, "all_losses.csv"))
 
         args = asdict(self)
         with open(osp.join(path, "args.json"), "w") as f:

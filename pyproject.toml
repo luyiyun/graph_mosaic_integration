@@ -1,48 +1,62 @@
 [build-system]
-requires = ["setuptools", "cython", "setuptools-scm"]  # 如果使用setup.py并且其中需要运行的包，都需要放在这里
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "gmi"
 authors = [
-  {name = "Rong Zhiwei", email = "18845728185@163.com"},
-  {name = "Yu Yipei", email = "yuhuilz@163.com"},
+  { name = "Rong Zhiwei", email = "18845728185@163.com" },
+  { name = "Yu Yipei", email = "yuhuilz@163.com" },
 ]
 description = "A deep generative model that addresses mosaic integration challenges."
-keywords = ["bioinformatics", "deep-learning", "single-cell", "moaic-integration"]
-license = {file = "LICENSE"}
+keywords = [
+  "bioinformatics",
+  "deep-learning",
+  "single-cell",
+  "moaic-integration",
+]
+license = { file = "LICENSE" }
 requires-python = ">=3.10"
 readme = "readme.md"
+version = "0.1.0"
+# dynamic = ["version"]
 dependencies = [
-  "numpy>=2.0.0",
-  "pandas",
-  "scipy",
-  "torch",
-  "scikit-learn",
-  "anndata",
-  "mudata",
-  "tqdm",
-  "matplotlib",
-  "scanpy",
-  "h5py",
-  "tables",
-]
-dynamic = ["version"]
-[project.optional-dependencies]
-develop = [
-    "ipdb",
-    "pytest",
-    "seaborn",
-    "scib_metrics",
-    "colorcet",
-    "harmony-pytorch",
-    "biothings_client",
-    "requests-cache",
+    "anndata>=0.11.3",
+    "biothings-client[caching]>=0.4.0",
+    "h5py>=3.12.1",
+    "matplotlib>=3.10.0",
+    "mudata>=0.3.1",
+    "numpy>=2.0.0",
+    "pandas>=2.2.3",
+    "scanpy>=1.10",
+    "scikit-learn>=1.6.1",
+    "scipy>=1.15.1",
+    "tables>=3.10.1",
+    "torch>=2.5.1",
+    "tqdm>=4.67.1",
 ]
 
+# [project.scripts]
+# graph-mosaic-integration = "graph_mosaic_integration:main"
 
-[tool.setuptools.packages]
-find = {where = ["src"], namespaces = true}  # namespaces=false will prevent any folder without an __init__.py file
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu124", marker = "platform_system == 'Windows'" }]
+torchvision = [
+  { index = "pytorch-cu124", marker = "platform_system == 'Windows'" },
+]
 
-[tool.setuptools_scm]
-# can be empty if no extra settings are needed, presence enables setuptools_scm
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true
+
+[dependency-groups]
+dev = [
+    "biothings-client>=0.4.0",
+    "colorcet>=3.1.0",
+    "ipdb>=0.13.13",
+    "pytest>=8.3.4",
+    "requests-cache>=1.2.1",
+    "scib-metrics>=0.5.1",
+    "seaborn>=0.13.2",
+]
