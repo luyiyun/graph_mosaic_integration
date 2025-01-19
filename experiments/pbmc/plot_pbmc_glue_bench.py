@@ -8,9 +8,11 @@ import matplotlib.pyplot as plt
 from scib_metrics.benchmark import Benchmarker, BioConservation
 from gmi import run_benchmark, data_infor_integrate
 from gmi.metric import get_X_from_mudata
-dataset = "bmmc"
+dataset = "pbmc"
+label = "coarse_cluster"
 # 加载 AnnData
-adata = sc.read(f'/home/yuyipei/graph_mosaic_integration/result/{dataset}_comparison.h5ad')
+adata = sc.read(f'/home/yuyipei/graph_mosaic_integration/result/{dataset}_glue/glue_{dataset}_embedding.h5ad')
+adata = adata[~adata.obs.index.duplicated(keep='first')]
 mdata_path = f"/data/share_data/yuytest/gmi_data/{dataset}.h5mu"
 mdata = mu.read(mdata_path)
 
@@ -19,20 +21,20 @@ mdata = mu.read(mdata_path)
 # 这里假设 adata 只包含一个模态（例如 RNA），其他模态需要根据实际情况补充
 X = get_X_from_mudata(mdata, sparse=True, fillna=0)
 mdata = ad.AnnData(X=X)
-mdata.obs=adata.obs
-mdata.obsm=adata.obsm
-mdata.obs['label']=mdata.obs['cell_type']
+mdata.obs=adata.obs.copy()
+mdata.obsm=adata.obsm.copy()
+mdata.obs['label']=mdata.obs[label].copy()
+mdata.obs['batch'] = mdata.obs['batch'].astype('category')
 print("Converted AnnData to MuData.")
-
 
 # 定义参数
 num_cell = adata.shape[0]  # 使用的细胞数量
-result_dir = f"/home/yuyipei/graph_mosaic_integration/result/scmomat_{dataset}_benchmark"  # 结果保存目录
+result_dir = f'/home/yuyipei/graph_mosaic_integration/result/{dataset}_glue'  # 结果保存目录
 os.makedirs(result_dir, exist_ok=True)  # 创建结果目录
 
 # 运行基准测试并保存结果
 results_list = []
-for key in ['scMoMaT_s0', 'scMoMaT_s1', 'scMoMaT_s2', 'scMoMaT_s3', 'scMoMaT_s4', 'scMoMaT_s5']:
+for key in ['X_glue_123', 'X_glue_42', 'X_glue_456', 'X_glue_789', 'X_glue_999']:
     if key in mdata.obsm:
         print(f"Running benchmark for {key}...")
         result_dirs = os.path.join(result_dir, key)
@@ -88,7 +90,7 @@ for key in ['scMoMaT_s0', 'scMoMaT_s1', 'scMoMaT_s2', 'scMoMaT_s3', 'scMoMaT_s4'
         )
         sc.pl.umap(
             mdata,
-            color=["coarse_cluster"],
+            color=[label],
             ax=axes[1],
             title="UMAP colored by Cell Type",
             show=False,
@@ -114,7 +116,7 @@ for key in ['scMoMaT_s0', 'scMoMaT_s1', 'scMoMaT_s2', 'scMoMaT_s3', 'scMoMaT_s4'
 if results_list:
     combined_results = pd.concat(results_list, axis=1)
     combined_results.columns = [f"{key}_{col}" for key, df in zip(
-        ['scMoMaT_s0', 'scMoMaT_s1', 'scMoMaT_s2', 'scMoMaT_s3', 'scMoMaT_s4', 'scMoMaT_s5'],
+        ['X_glue_123', 'X_glue_42', 'X_glue_456', 'X_glue_789', 'X_glue_999'],
         results_list
     ) for col in df.columns]
     

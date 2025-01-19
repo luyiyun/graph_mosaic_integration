@@ -30,8 +30,8 @@ def train_scglue(mdata_path, result_dir, random_seed):
     set_seed(random_seed)
 
     # 创建结果目录
-    result_path = os.path.join(result_dir, f"seed_{random_seed}")
-    os.makedirs(result_path, exist_ok=True)
+    os.makedirs(result_dir, exist_ok=True)
+
     # 读取数据
     mdata = mu.read(mdata_path)
     rna = mdata.mod['rna']
@@ -41,20 +41,18 @@ def train_scglue(mdata_path, result_dir, random_seed):
     # 预处理 RNA 数据
     rna.layers["counts"] = rna.X.copy()  # 保留原始计数数据
     sc.pp.highly_variable_genes(rna, n_top_genes=2000, flavor="cell_ranger")
-    # sc.pp.normalize_total(rna)
-    # sc.pp.log1p(rna)
     sc.pp.scale(rna)
 
     # 预处理 ATAC 数据
     atac.layers["counts"] = atac.X.copy()  # 保留原始计数数据
     sc.pp.highly_variable_genes(atac, n_top_genes=8000, flavor="cell_ranger")
-    # sc.pp.normalize_total(atac)
-    # sc.pp.log1p(atac)
     sc.pp.scale(atac)
+
     if "highly_variable" not in adt.var:
         print("ADT 数据未计算高可变特征，将使用所有特征。")
     else:
         print("ADT 数据已计算高可变特征。")
+
     # 构建 guidance 图
     guidance = scglue.genomics.rna_anchored_guidance_graph(rna, atac)
     guidance.add_nodes_from(adt.var_names)  # 添加 ADT 的节点
@@ -66,12 +64,10 @@ def train_scglue(mdata_path, result_dir, random_seed):
     scglue.models.configure_dataset(
         rna, "Normal", use_highly_variable=True,
         use_layer="counts",
-        #use_rep="lsi_pca"  # 使用原始计数数据
     )
     scglue.models.configure_dataset(
         atac, "Normal", use_highly_variable=True,
         use_layer="counts",
-        #use_rep="lsi_pca"  # 使用原始计数数据
     )
     scglue.models.configure_dataset(
         adt, "NB",  # 使用负二项分布
@@ -89,45 +85,44 @@ def train_scglue(mdata_path, result_dir, random_seed):
     # 训练 SCGLUE 模型
     glue = scglue.models.fit_SCGLUE(
         {"rna": rna, "atac": atac, 'adt': adt}, guidance,
-        fit_kws={"directory": os.path.join(result_path, "glue_full")}  
+        fit_kws={"directory": os.path.join(result_dir, f"glue_full_seed_{random_seed}")}
     )
 
-    # 保存模型
-    glue.save(os.path.join(result_path, "glue.dill"))
-
     # 计算 embedding
-    rna.obsm["X_glue"] = glue.encode_data("rna", rna)
-    atac.obsm["X_glue"] = glue.encode_data("atac", atac)
-    adt.obsm["X_glue"] = glue.encode_data("adt", adt)
+    rna.obsm[f"X_glue_{random_seed}"] = glue.encode_data("rna", rna)
+    atac.obsm[f"X_glue_{random_seed}"] = glue.encode_data("atac", atac)
+    adt.obsm[f"X_glue_{random_seed}"] = glue.encode_data("adt", adt)
 
-    # 合并 embedding
+    # 合并数据
     combined = ad.concat([rna, atac, adt])
 
-    # 计算邻居图
-    sc.pp.neighbors(combined, use_rep="X_glue", metric="cosine")
+    # 保存模型（可选）
+    glue.save(os.path.join(result_dir, f"glue_model_seed_{random_seed}.dill"))
 
-    # 计算 feature embeddings
-    feature_embeddings = glue.encode_graph(guidance_hvf)
-    feature_embeddings = pd.DataFrame(feature_embeddings, index=glue.vertices)
-
-    # 分配 feature embeddings
-    rna.varm["X_glue"] = feature_embeddings.reindex(rna.var_names).to_numpy()
-    atac.varm["X_glue"] = feature_embeddings.reindex(atac.var_names).to_numpy()
-    adt.varm["X_glue"] = feature_embeddings.reindex(adt.var_names).to_numpy()
-
-    # 保存结果
-    
-    combined.write(os.path.join(result_path, "glue_bmmc_embedding.h5ad"))
-    print(f"随机种子 {random_seed} 的结果已保存到: {result_path}")
+    print(f"随机种子 {random_seed} 的结果已保存到: {result_dir}")
+    return combined
 
 
 # 主程序
 if __name__ == "__main__":
     # 参数设置
     mdata_path = "/data/share_data/yuytest/gmi_data/bmmc.h5mu"
-    result_dir = "./result/bmmc"
+    result_dir = "./result/bmmc_glue"
     random_seeds = [1, 2, 3, 4, 5]  # 5 个不同的随机种子
+
+    # 初始化一个空的 AnnData 对象
+    combined = None
 
     # 循环训练
     for seed in random_seeds:
-        train_scglue(mdata_path, result_dir, seed)
+        result = train_scglue(mdata_path, result_dir, seed)
+        if combined is None:
+            combined = result  # 第一次运行时初始化 combined
+        else:
+            # 将新的 embedding 添加到 combined 的 obsm 中
+            for key, value in result.obsm.items():
+                combined.obsm[key] = value
+
+    # 保存最终结果
+    combined.write(os.path.join(result_dir, "glue_bmmc_embedding.h5ad"))
+    print(f"所有随机种子的结果已保存到: {os.path.join(result_dir, 'glue_bmmc_embedding.h5ad')}")

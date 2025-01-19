@@ -45,23 +45,24 @@ def train_midas(data_dir, output_dir, max_epochs=2000):
     
     # 修改各模态的编码器和解码器配置
     # RNA 模态
-    configs['dims_before_enc_rna'] = [1462]
-    configs['dims_after_dec_rna'] = [1462]
+    configs['dims_before_enc_rna'] = [8000]
+    configs['dims_after_dec_rna'] = [8000]
     configs['distribution_dec_rna'] = 'POISSON'
     configs['lam_recon_rna'] = 1
     
     # ATAC 模态
-    configs['dims_before_enc_atac'] = [8151]
-    configs['dims_after_dec_atac'] = [8151]
+    configs['dims_before_enc_atac'] = [8000]
+    configs['dims_after_dec_atac'] = [8000]
     configs['distribution_dec_atac'] = 'BERNOULLI'
     configs['lam_recon_atac'] = 1
     
-    # Protein 模态
-    configs['dims_before_enc_protein'] = [209]
-    configs['dims_after_dec_protein'] = [209]
-    configs['distribution_dec_protein'] = 'POISSON'
-    configs['lam_recon_protein'] = 1
+    # ADT 模态
+    configs['dims_before_enc_adt'] = [24]
+    configs['dims_after_dec_adt'] = [24]
+    configs['distribution_dec_adt'] = 'POISSON'
+    configs['lam_recon_adt'] = 1
     
+    # 共享编码器和解码器配置
     configs['dims_shared_enc'] = [256, 128]
     configs['dims_shared_dec'] = [128, 256]
     
@@ -69,7 +70,7 @@ def train_midas(data_dir, output_dir, max_epochs=2000):
     transform = {
         'rna': 'log1p',
         'atac': 'binarize',
-        'protein': 'log1p'
+        'adt': 'log1p'
     }
     
     # 配置模型
@@ -161,10 +162,10 @@ def run_midas_pipeline(data_dir, output_dir, h5ad_path, max_epochs=2000):
         save_embeddings_to_h5ad(output_dir, h5ad_path, model, seed)
 
 
-# 示例调用
+
 if __name__ == "__main__":
-    data_dir = "/data/share_data/yuytest/gmi_data/midas"
-    output_dir = "/home/yuyipei/graph_mosaic_integration/result/midas_pbmc"
-    h5ad_path = "/home/yuyipei/graph_mosaic_integration/result/midas_pbmc/embeddings.h5ad"
+    data_dir = "/data/share_data/yuytest/gmi_data/midas/bmmc"
+    output_dir = "/home/yuyipei/graph_mosaic_integration/result/midas_bmmc"
+    h5ad_path = "/home/yuyipei/graph_mosaic_integration/result/midas_bmmc/embeddings.h5ad"
     
     run_midas_pipeline(data_dir, output_dir, h5ad_path)

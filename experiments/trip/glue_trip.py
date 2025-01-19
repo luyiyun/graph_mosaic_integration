@@ -9,6 +9,7 @@ from datetime import datetime
 import numpy as np
 import random
 import itertools
+from scglue.models import SCGLUEModel, PairedSCGLUEModel
 
 def set_seed(seed):
     """
@@ -113,9 +114,16 @@ def train_scglue(mdata_path, result_dir, random_seed):
     # 训练 SCGLUE 模型
     # 添加随机种子
     glue = scglue.models.fit_SCGLUE(
-        {"rna": rna, "atac": atac, 'met': met}, guidance, 
-        fit_kws={"directory": os.path.join(result_path, "glue_full")}
+        adatas={"rna": rna, "atac": atac, "met": met},
+        graph=guidance,
+        model=SCGLUEModel,
+        init_kws={"random_seed": random_seed}  # 设置随机种子
     )
+    # glue = scglue.models.fit_SCGLUE(
+    #     {"rna": rna, "atac": atac, 'met': met}, guidance, 
+    #     fit_kws={"directory": os.path.join(result_path, "glue_full")},
+    #     random_seed=random_seed
+    # )
 
     # 保存模型
     glue.save(os.path.join(result_path, "glue.dill"))
@@ -131,14 +139,14 @@ def train_scglue(mdata_path, result_dir, random_seed):
     # 计算邻居图
     sc.pp.neighbors(combined, use_rep="X_glue", metric="cosine")
 
-    # 计算 feature embeddings
-    feature_embeddings = glue.encode_graph(guidance_hvf)
-    feature_embeddings = pd.DataFrame(feature_embeddings, index=glue.vertices)
+    # # 计算 feature embeddings
+    # feature_embeddings = glue.encode_graph(guidance_hvf)
+    # feature_embeddings = pd.DataFrame(feature_embeddings, index=glue.vertices)
 
-    # 分配 feature embeddings
-    rna.varm["X_glue"] = feature_embeddings.reindex(rna.var_names).to_numpy()
-    atac.varm["X_glue"] = feature_embeddings.reindex(atac.var_names).to_numpy()
-    met.varm["X_glue"] = feature_embeddings.reindex(met.var_names).to_numpy()  
+    # # 分配 feature embeddings
+    # rna.varm["X_glue"] = feature_embeddings.reindex(rna.var_names).to_numpy()
+    # atac.varm["X_glue"] = feature_embeddings.reindex(atac.var_names).to_numpy()
+    # met.varm["X_glue"] = feature_embeddings.reindex(met.var_names).to_numpy()  
 
     # 保存结果
     
@@ -150,7 +158,7 @@ def train_scglue(mdata_path, result_dir, random_seed):
 if __name__ == "__main__":
     # 参数设置
     mdata_path = "/data/share_data/yuytest/gmi_data/triple.h5mu"
-    result_dir = "./result/trip"
+    result_dir = "./result/triple_glue"
     random_seeds = [1, 2, 3, 4, 5]  # 5 个不同的随机种子
 
     # 循环训练
