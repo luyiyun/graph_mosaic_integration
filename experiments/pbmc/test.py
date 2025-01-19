@@ -494,4 +494,14 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # main()
+    a0 = 0.1
+    i = np.linspace(2, 40, num=100)
+    mul = 2 ** (1 / np.log(i)) ** 2
+    mul = np.r_[1.0, np.cumprod(mul)]
+    alpha = mul * a0
+
+    plt.plot(np.arange(len(alpha)), alpha)
+    plt.xlabel("Number of Clusters")
+    plt.ylabel("Alpha")
+    plt.show()

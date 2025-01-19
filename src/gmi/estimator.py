@@ -242,14 +242,15 @@ class GraphMosaicIntegration:
             adversarial_with_feature_nodes=False,
             batch_size=self.batch_size,
             disc_node_num_per_batch=self.disc_node_num_per_batch,
-            label_smoothing=self.label_smoothing,
             neg_sampling_mode=self.neg_sampling_mode,
             loss_type=self.loss_type,
             patience=self.patience,
             random_seed=self.random_seed,
+            label_smoothing=self.label_smoothing,
             grad_reverse_weight=alpha,
             cls_loss_weight=loss_alpha,
             clu_loss_weight=loss_clu_weight,
+            # clu_loss_temp=loss_clu_temp,
         )
 
         self.trainer.train(
