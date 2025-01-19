@@ -8,31 +8,46 @@ import matplotlib.pyplot as plt
 from scib_metrics.benchmark import Benchmarker, BioConservation
 from gmi import run_benchmark, data_infor_integrate
 from gmi.metric import get_X_from_mudata
+import sys
+sys.path.append(os.path.abspath("src/gmi/mmAAVI"))
+
+from preprocess import merge_obs_from_all_modalities
+
 dataset = "muto"
+label = "cell_type"
 # 加载 AnnData
-adata = sc.read(f'/home/yuyipei/graph_mosaic_integration/result/{dataset}_comparison.h5ad')
+adata = sc.read(f'/home/yuyipei/graph_mosaic_integration/result/midas_{dataset}/embeddings.h5ad')
+
+# adata = adata[~adata.obs.index.duplicated(keep='first')]
 mdata_path = f"/data/share_data/yuytest/gmi_data/{dataset}.h5mu"
 mdata = mu.read(mdata_path)
 
 # 将 AnnData 转换为 MuData
 # 假设 adata 包含多个模态的数据（例如 RNA 和 ATAC），需要手动拆分
 # 这里假设 adata 只包含一个模态（例如 RNA），其他模态需要根据实际情况补充
+merge_obs_from_all_modalities(mdata, key=label)
+merge_obs_from_all_modalities(mdata, key="batch")
+obs = mdata.obs.copy()
 X = get_X_from_mudata(mdata, sparse=True, fillna=0)
-mdata = ad.AnnData(X=X)
-mdata.obs=adata.obs
-mdata.obsm=adata.obsm
-mdata.obs['label']=mdata.obs['cell_type']
-print("Converted AnnData to MuData.")
 
+mdata = ad.AnnData(X=X)
+
+mdata.obs=obs
+mdata.obsm=adata.obsm.copy()
+
+
+mdata.obs['label']=mdata.obs[label].copy()
+mdata.obs['batch'] = mdata.obs['batch'].astype('category')
+print("Converted AnnData to MuData.")
 
 # 定义参数
 num_cell = adata.shape[0]  # 使用的细胞数量
-result_dir = f"/home/yuyipei/graph_mosaic_integration/result/scmomat_{dataset}_benchmark"  # 结果保存目录
+result_dir = f'/home/yuyipei/graph_mosaic_integration/result/midas_{dataset}'  # 结果保存目录
 os.makedirs(result_dir, exist_ok=True)  # 创建结果目录
 
 # 运行基准测试并保存结果
 results_list = []
-for key in ['scMoMaT_s0', 'scMoMaT_s1', 'scMoMaT_s2', 'scMoMaT_s3', 'scMoMaT_s4', 'scMoMaT_s5']:
+for key in ['X_midas_1','X_midas_2','X_midas_3','X_midas_4','X_midas_5']:
     if key in mdata.obsm:
         print(f"Running benchmark for {key}...")
         result_dirs = os.path.join(result_dir, key)
@@ -88,7 +103,7 @@ for key in ['scMoMaT_s0', 'scMoMaT_s1', 'scMoMaT_s2', 'scMoMaT_s3', 'scMoMaT_s4'
         )
         sc.pl.umap(
             mdata,
-            color=["coarse_cluster"],
+            color=[label],
             ax=axes[1],
             title="UMAP colored by Cell Type",
             show=False,
@@ -114,7 +129,7 @@ for key in ['scMoMaT_s0', 'scMoMaT_s1', 'scMoMaT_s2', 'scMoMaT_s3', 'scMoMaT_s4'
 if results_list:
     combined_results = pd.concat(results_list, axis=1)
     combined_results.columns = [f"{key}_{col}" for key, df in zip(
-        ['scMoMaT_s0', 'scMoMaT_s1', 'scMoMaT_s2', 'scMoMaT_s3', 'scMoMaT_s4', 'scMoMaT_s5'],
+        ['X_midas_1','X_midas_2','X_midas_3','X_midas_4','X_midas_5'],
         results_list
     ) for col in df.columns]
     

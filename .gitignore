@@ -17,3 +17,5 @@ build/
 *.dill
 glue/
 glue_full/
+saved_models/
+lightning_logs/

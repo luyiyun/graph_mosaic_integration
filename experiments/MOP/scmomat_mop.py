@@ -21,7 +21,7 @@ def main():
     parser.add_argument("--preproc_data_dir", default="/data/share_data/yuytest/gmi_data/")
     parser.add_argument("--preproc_data_name", default="MOP")  # 修改为mop数据
     parser.add_argument("--results_dir", default="/home/yuyipei/graph_mosaic_integration/result")
-    parser.add_argument("--results_name", default="mop_comparison")  # 修改结果名称
+    parser.add_argument("--results_name", default="MOP_comparison")  # 修改结果名称
     parser.add_argument("--not_use_pseudo", action="store_true")
     parser.add_argument("--seeds", default=list(range(6)), type=int, nargs="+")
     parser.add_argument("--scmomat_device", default="cuda:0")
