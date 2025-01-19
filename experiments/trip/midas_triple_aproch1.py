@@ -40,32 +40,18 @@ def train_midas(data_dir, output_dir, max_epochs=2000):
         output_dir: str, 输出目录路径。
         max_epochs: int, 最大训练轮数，默认为 2000。
     """
+
+
+    # Data for each modality and batch
+    data_config = [
+        {'rna': '/data/share_data/yuytest/gmi_data/midas/triple_1/batch_b2-rna/rna.csv'},
+        {'rna': 'batch_2_rna.csv', 'adt': 'batch_2_adt.csv', 'atac': 'batch_2_atac.csv'},
+        {'rna': 'batch_3_rna.csv', 'adt': 'batch_3_adt.csv', 'atac': 'batch_3_atac.csv'}
+    ]
+
     # 加载配置
     configs = load_config()
 
-    # 修改各模态的编码器和解码器配置
-    # RNA 模态
-    configs['dims_before_enc_rna'] = [128,2000]
-    configs['dims_after_dec_rna'] = [2000,128]
-    configs['distribution_dec_rna'] = 'POISSON'
-    configs['lam_recon_rna'] = 1
-    
-    # ATAC 模态
-    configs['dims_before_enc_atac'] = [128,4124]
-    configs['dims_after_dec_atac'] = [4124,128]
-    configs['distribution_dec_atac'] = 'BERNOULLI'
-    configs['lam_recon_atac'] = 1
-    
-    # MET 模态
-    configs['dims_before_enc_met'] = [128,3922]
-    configs['dims_after_dec_met'] = [3922,128]
-    configs['distribution_dec_met'] = 'POISSON'
-    configs['lam_recon_met'] = 1
-    
-    # 共享编码器和解码器配置
-    configs['dims_shared_enc'] = [256, 128]
-    configs['dims_shared_dec'] = [128, 256]
-    
     # 定义各模态的转换规则
     transform = {
         'rna': 'log1p',
@@ -165,7 +151,7 @@ def run_midas_pipeline(data_dir, output_dir, h5ad_path, max_epochs=2000):
 
 # 示例调用
 if __name__ == "__main__":
-    data_dir = "/data/share_data/yuytest/gmi_data/midas/triple"
+    data_dir = "/data/share_data/yuytest/gmi_data/midas/triple_1"
     output_dir = "/home/yuyipei/graph_mosaic_integration/result/midas_triple"
     h5ad_path = "/home/yuyipei/graph_mosaic_integration/result/midas_triple/embeddings.h5ad"
     

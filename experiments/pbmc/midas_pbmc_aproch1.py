@@ -31,7 +31,7 @@ def setup_environment(gpu_id='0', seed=42):
     torch.backends.cudnn.benchmark = False
 
 
-def train_midas(data_dir, output_dir, max_epochs=2000):
+def train_midas(output_dir, max_epochs=2000):
     """
     训练 MIDAS 模型并生成嵌入表示。
     
@@ -43,51 +43,47 @@ def train_midas(data_dir, output_dir, max_epochs=2000):
     # 加载配置
     configs = load_config()
 
-    # 修改各模态的编码器和解码器配置
-    # RNA 模态
-    configs['dims_before_enc_rna'] = [128,2000]
-    configs['dims_after_dec_rna'] = [2000,128]
-    configs['distribution_dec_rna'] = 'POISSON'
-    configs['lam_recon_rna'] = 1
-    
-    # ATAC 模态
-    configs['dims_before_enc_atac'] = [128,4124]
-    configs['dims_after_dec_atac'] = [4124,128]
-    configs['distribution_dec_atac'] = 'BERNOULLI'
-    configs['lam_recon_atac'] = 1
-    
-    # MET 模态
-    configs['dims_before_enc_met'] = [128,3922]
-    configs['dims_after_dec_met'] = [3922,128]
-    configs['distribution_dec_met'] = 'POISSON'
-    configs['lam_recon_met'] = 1
-    
-    # 共享编码器和解码器配置
-    configs['dims_shared_enc'] = [256, 128]
-    configs['dims_shared_dec'] = [128, 256]
-    
     # 定义各模态的转换规则
     transform = {
-        'rna': 'log1p',
+        # 'rna': 'log1p',
         'atac': 'binarize',
-        'met': 'log1p'
+        # 'protein': 'log1p'
     }
-    
+
+    mask_config = [
+        {'rna': '/data/share_data/yuytest/gmi_data/midas/pbmc_1/batch_1/rna_mask.csv', 'protein': '/data/share_data/yuytest/gmi_data/midas/pbmc_1/batch_1/protein_mask.csv'},
+        {'rna': '/data/share_data/yuytest/gmi_data/midas/pbmc_1/batch_2/rna_mask.csv', 'protein': '/data/share_data/yuytest/gmi_data/midas/pbmc_1/batch_2/protein_mask.csv'},
+        {'protein': '/data/share_data/yuytest/gmi_data/midas/pbmc_1/batch_3/protein_mask.csv', 'atac': '/data/share_data/yuytest/gmi_data/midas/pbmc_1/batch_3/atac_mask.csv'},
+        {'protein': '/data/share_data/yuytest/gmi_data/midas/pbmc_1/batch_4/protein_mask.csv', 'atac': '/data/share_data/yuytest/gmi_data/midas/pbmc_1/batch_4/atac_mask.csv'}
+        ]
+    data_config = [
+        {'rna': '/data/share_data/yuytest/gmi_data/midas/pbmc_1/batch_1/rna.csv', 'protein': '/data/share_data/yuytest/gmi_data/midas/pbmc_1/batch_1/protein.csv'},
+        {'rna': '/data/share_data/yuytest/gmi_data/midas/pbmc_1/batch_2/rna.csv', 'protein': '/data/share_data/yuytest/gmi_data/midas/pbmc_1/batch_2/protein.csv'},
+        {'protein': '/data/share_data/yuytest/gmi_data/midas/pbmc_1/batch_3/protein.csv', 'atac': '/data/share_data/yuytest/gmi_data/midas/pbmc_1/batch_3/atac.csv'},
+        {'protein': '/data/share_data/yuytest/gmi_data/midas/pbmc_1/batch_4/protein.csv', 'atac': '/data/share_data/yuytest/gmi_data/midas/pbmc_1/batch_4/atac.csv'}
+        ]
+    dims_x = {
+        'rna': [1462],    # RNA data is represented as a cell x 200 matrix.
+        'protein': [209],    # ADT data is represented as a cell x 100 matrix.
+        'atac': [8151]  # ATAC data is split into multiple chunks with varying dimensions
+    }
     # 配置模型
-    model = MIDAS.configure_data_from_dir(configs, data_dir,transform)
+    # Configure MIDAS with the data
+    datasets, dims_s, s_joint, combs = MIDAS.configure_data_from_csv(data_config, mask_config, transform)
+    model = MIDAS.configure_data(configs, datasets, dims_x, dims_s, s_joint, combs)
     
     # 打印模型配置以验证
     print("Model configurations:")
     print(configs)
     
     trainer = L.Trainer(
-        accelerator='auto',
-        devices=1,
-        precision=32,
-        strategy='auto',
-        num_nodes=1,
+        # accelerator='auto',
+        # devices=1,
+        # precision=32,
+        # strategy='auto',
+        # num_nodes=1,
         max_epochs=max_epochs,
-        log_every_n_steps=5
+        # log_every_n_steps=5
     )
     
     # 开始训练
@@ -136,7 +132,7 @@ def save_embeddings_to_h5ad(output_dir, h5ad_path, model, seed):
     print(f"嵌入表示已保存到: {h5ad_path} (种子: {seed})")
 
 
-def run_midas_pipeline(data_dir, output_dir, h5ad_path, max_epochs=2000):
+def run_midas_pipeline(output_dir, h5ad_path, max_epochs=1):
     """
     运行完整的 MIDAS 流程，包括训练、生成嵌入表示并保存为 h5ad 文件。
     
@@ -156,17 +152,15 @@ def run_midas_pipeline(data_dir, output_dir, h5ad_path, max_epochs=2000):
         setup_environment(seed=seed)
         
         # 训练模型并生成嵌入表示
-        model = train_midas(data_dir, output_dir, max_epochs)
+        model = train_midas(output_dir, max_epochs)
         
         # 将嵌入表示保存为 h5ad 文件
         save_embeddings_to_h5ad(output_dir, h5ad_path, model, seed)
 
 
-
 # 示例调用
 if __name__ == "__main__":
-    data_dir = "/data/share_data/yuytest/gmi_data/midas/triple"
-    output_dir = "/home/yuyipei/graph_mosaic_integration/result/midas_triple"
-    h5ad_path = "/home/yuyipei/graph_mosaic_integration/result/midas_triple/embeddings.h5ad"
+    output_dir = "/home/yuyipei/graph_mosaic_integration/result/midas_pbmc"
+    h5ad_path = "/home/yuyipei/graph_mosaic_integration/result/midas_pbmc/embeddings.h5ad"
     
-    run_midas_pipeline(data_dir, output_dir, h5ad_path)
+    run_midas_pipeline(output_dir, h5ad_path)
