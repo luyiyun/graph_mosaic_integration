@@ -43,6 +43,7 @@ def train_midas(output_dir, max_epochs=2000):
     # 加载配置
     configs = load_config()
 
+
     # 定义各模态的转换规则
     transform = {
         # 'rna': 'log1p',
@@ -77,13 +78,13 @@ def train_midas(output_dir, max_epochs=2000):
     print(configs)
     
     trainer = L.Trainer(
-        # accelerator='auto',
-        # devices=1,
-        # precision=32,
-        # strategy='auto',
-        # num_nodes=1,
+        accelerator='auto',
+        devices=1,
+        precision=32,
+        strategy='auto',
+        num_nodes=1,
         max_epochs=max_epochs,
-        # log_every_n_steps=5
+        log_every_n_steps=5
     )
     
     # 开始训练
