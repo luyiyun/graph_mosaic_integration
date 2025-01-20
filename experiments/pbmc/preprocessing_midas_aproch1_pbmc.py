@@ -1,17 +1,19 @@
 import os
+from argparse import ArgumentParser
 import numpy as np
 import pandas as pd
 import mudata as mu
 from scipy.sparse import issparse
 
-def prepare_midas_input(mdata, output_dir, modality_names=None, batch_key='batch'):
+
+def prepare_midas_input(mdata, output_dir, modality_names=None, batch_key="batch"):
     """
     将 h5mu 格式的数据转换为 MIDAS 所需的输入格式（Option 1: 每个模态和批次保存为一个 CSV 文件）。
 
     参数:
         mdata: MuData 对象，包含多模态数据。
         output_dir: str，输出文件的目录路径。
-        modality_names: dict，可选，指定每个模态的名称。默认是 {'rna': 'rna', 'atac': 'atac', 'protein': 'protein'}。
+        modality_names: dict，可选，指定每个模态的名称。默认是 {'rna': 'rna', 'atac': 'atac', 'protein': 'adt'}。
         batch_key: str，obs 中表示批次的列名。默认是 'batch'。
 
     返回:
@@ -21,8 +23,8 @@ def prepare_midas_input(mdata, output_dir, modality_names=None, batch_key='batch
     """
     # 默认模态名称
     if modality_names is None:
-        modality_names = {'rna': 'rna', 'atac': 'atac', 'protein': 'protein'}
-    
+        modality_names = {"rna": "rna", "atac": "atac", "protein": "adt"}
+
     # 创建输出目录
     os.makedirs(output_dir, exist_ok=True)
 
@@ -68,18 +70,22 @@ def prepare_midas_input(mdata, output_dir, modality_names=None, batch_key='batch
                 batch_data = batch_data.toarray()
 
             # 创建批次目录
-            batch_dir = os.path.join(output_dir, f'batch_{batch}')
+            batch_dir = os.path.join(output_dir, f"batch_{batch}")
             os.makedirs(batch_dir, exist_ok=True)
 
             # 将批次数据保存为单个 CSV 文件（cell x feature 矩阵）
-            batch_csv_path = os.path.join(batch_dir, f'{modality_name}.csv')
-            batch_df = pd.DataFrame(batch_data, index=batch_indices, columns=modality_var.index)
+            batch_csv_path = os.path.join(batch_dir, f"{modality_name}.csv")
+            batch_df = pd.DataFrame(
+                batch_data, index=batch_indices, columns=modality_var.index
+            )
             batch_df.to_csv(batch_csv_path, index=True)  # 包含索引和列名
 
             # 创建 mask 文件
-            mask_csv_path = os.path.join(batch_dir, f'{modality_name}_mask.csv')
+            mask_csv_path = os.path.join(batch_dir, f"{modality_name}_mask.csv")
             # 默认所有特征都存在（1）
-            mask_df = pd.DataFrame(np.ones((1, modality_data.shape[1])), columns=modality_var.index)
+            mask_df = pd.DataFrame(
+                np.ones((1, modality_data.shape[1])), columns=modality_var.index
+            )
             mask_df.to_csv(mask_csv_path, index=True)  # 包含索引和列名
 
             # 更新数据配置和 Mask 配置
@@ -97,11 +103,21 @@ def prepare_midas_input(mdata, output_dir, modality_names=None, batch_key='batch
     return data_config, mask_config, dims_x
 
 
-
 if __name__ == "__main__":
+    parser = ArgumentParser()
     # 设置输入和输出路径
-    mdata_path = "/data/share_data/yuytest/gmi_data/pbmc.h5mu"
-    output_dir = "/data/share_data/yuytest/gmi_data/midas/pbmc_1"
+    parser.add_argument(
+        "--mdata_path", type=str, default="/data/share_data/yuytest/gmi_data/pbmc.h5mu"
+    )
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        default="/data/share_data/yuytest/gmi_data/midas/pbmc_1",
+    )
+    args = parser.parse_args()
+
+    mdata_path = args.mdata_path
+    output_dir = args.output_dir
 
     # 加载 MuData 对象
     print("加载 MuData 对象...")
@@ -110,11 +126,14 @@ if __name__ == "__main__":
 
     # 调用函数生成 MIDAS 输入
     print("准备 MIDAS 输入数据...")
-    data_config, mask_config,dims_x = prepare_midas_input(
-        mdata, output_dir, modality_names={'rna': 'rna', 'atac': 'atac', 'protein': 'protein'}
+    data_config, mask_config, dims_x = prepare_midas_input(
+        mdata,
+        output_dir,
+        modality_names={"rna": "rna", "atac": "atac", "protein": "adt"},
     )
 
     # 打印生成的配置
     print("数据配置:", data_config)
-    print('mask',mask_config)
+    print("mask", mask_config)
     print("维度:", dims_x)
+
