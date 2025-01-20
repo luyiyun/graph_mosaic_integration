@@ -86,50 +86,51 @@ class DomainClassifier(nn.Module):
             raise NotImplementedError
 
 
-class FullModel(nn.Module):
+class GMIModel(nn.Module):
     def __init__(
         self,
         num_nodes,
         embedding_dim,
-        num_batch: int | None = None,
-        hidden_dims: tuple[int] = (64,),
+        disc_hidden_dims: tuple[int] = (64,),
         bn: bool = False,
-        add_batch_embedding: bool = False,
-        n_cells: int | None = None,
         bilinear: bool = False,
+        num_cells: int | None = None,
         num_cluster: int | None = None,
+        cell_batch_ids: torch.Tensor | None = None,
+        use_batch_embedding: bool = False,
         loss_type: Literal["weighted_softmax", "margin_ranking"] = "weighted_softmax",
     ):
-        if add_batch_embedding and num_batch is None:
-            raise ValueError(
-                "num_batch must be provided " "when add_batch_embedding is True"
-            )
+        if use_batch_embedding:
+            assert (
+                cell_batch_ids is not None
+            ), "cell_batch_ids must be provided when use_batch_embedding is True"
         assert loss_type in [
             "weighted_softmax",
             "margin_ranking",
         ], f"loss_type {loss_type} not supported"
 
-        super(FullModel, self).__init__()
-        self.add_batch_embedding = add_batch_embedding
-        self.n_cells = n_cells
+        super(GMIModel, self).__init__()
+        self.n_cells = num_cells
         self.bilinear = bilinear
         self.n_cluster = num_cluster
         self.loss_type = loss_type
-        self.num_batch = num_batch
+        self.use_batch_embedding = use_batch_embedding
+
+        self.register_buffer("cell_batch_ids", cell_batch_ids)
+        self.n_batches = (
+            cell_batch_ids.max().item() + 1 if cell_batch_ids is not None else 1
+        )
 
         # 嵌入层
         self.node_embedding = nn.Embedding(num_nodes, embedding_dim)
-        if num_batch is not None:
-            # 梯度反转层
-            # self.grl = GradientReversal(alpha=alpha)
-            # 领域分类器
+
+        # 领域分类器
+        if self.n_batches > 1:
             self.domain_classifier = DomainClassifier(
-                embedding_dim, num_batch, hiddens=hidden_dims, bn=bn
+                embedding_dim, self.n_batches, hiddens=disc_hidden_dims, bn=bn
             )
-        else:
-            print("initialized edge model")
-        if add_batch_embedding:
-            self.batch_embedding = nn.Embedding(num_batch, embedding_dim)
+        if use_batch_embedding:
+            self.batch_embedding = nn.Embedding(self.n_batches, embedding_dim)
         if bilinear:
             self.relation_matrix = nn.Parameter(
                 torch.randn(embedding_dim, embedding_dim) * 0.1
@@ -143,19 +144,18 @@ class FullModel(nn.Module):
         self,
         pos_edges: torch.Tensor,
         neg_edges: torch.Tensor,
+        pos_edges_weights: torch.Tensor | None = None,
         domain_input: torch.Tensor | None = None,
         domain_label: torch.Tensor | None = None,
-        node_batch_indice: torch.Tensor | None = None,
+        domain_weights: torch.Tensor | None = None,
         grad_reverse_weight: float = 1.0,
         label_smoothing: float = 0.0,
-        pos_edges_weights: torch.Tensor | None = None,
-        pred_sample_weights: torch.Tensor | None = None,
-        info_nce_temp: float = 1.0,
+        weighted_softmax_temp: float = 1.0,
         clu_loss_temp: float = 1.0,
         cls_loss_weight: float = 1.0,
         clu_loss_weight: float = 1.0,
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor], dict[str, torch.Tensor]]:
-        flag_calc_cls_loss = self.num_batch is not None and cls_loss_weight > 0.0
+        flag_calc_cls_loss = self.n_batches > 1 and cls_loss_weight > 0.0
         flag_calc_clu_loss = self.n_cluster is not None and clu_loss_weight > 0.0
         if domain_input is None and (flag_calc_cls_loss or flag_calc_clu_loss):
             assert (
@@ -172,20 +172,16 @@ class FullModel(nn.Module):
         # [n, 4, 2, embedding_dim]
         neg_edges_emb = self.node_embedding(neg_edges)
 
-        if self.add_batch_embedding:
+        if self.use_batch_embedding:
             # 只给cell nodes加batch embedding
             mask_pos = pos_edges < self.n_cells
             cell_nodes = pos_edges[mask_pos]
-            batch_embeddings = self.batch_embedding(
-                node_batch_indice[cell_nodes]
-            )  # n x emb_dim
+            batch_embeddings = self.batch_embedding(self.cell_batch_ids[cell_nodes])
             pos_edges_emb[mask_pos] = pos_edges_emb[mask_pos] + batch_embeddings
 
             mask_neg = neg_edges < self.n_cells
             cell_nodes = neg_edges[mask_neg]
-            batch_embeddings = self.batch_embedding(
-                node_batch_indice[cell_nodes]
-            )  # n x emb_dim
+            batch_embeddings = self.batch_embedding(self.cell_batch_ids[cell_nodes])
             neg_edges_emb[mask_neg] = neg_edges_emb[mask_neg] + batch_embeddings
 
         # 计算边得分
@@ -214,7 +210,8 @@ class FullModel(nn.Module):
         # 计算正样本和负样本的损失
         if self.loss_type == "weighted_softmax":
             all_scores = (
-                torch.cat([pos_scores.unsqueeze(-1), neg_scores], dim=1) / info_nce_temp
+                torch.cat([pos_scores.unsqueeze(-1), neg_scores], dim=1)
+                / weighted_softmax_temp
             )
             denominator = torch.logsumexp(all_scores, dim=1)
             softmax_loss = denominator - pos_scores
@@ -239,7 +236,7 @@ class FullModel(nn.Module):
             )
             domain_pred = self.domain_classifier(domain_embed)
             others["pred"] = domain_pred
-            if pred_sample_weights is not None:
+            if domain_weights is not None:
                 loss_domain = F.cross_entropy(
                     domain_pred,
                     domain_label,
@@ -247,8 +244,8 @@ class FullModel(nn.Module):
                     reduction="none",
                 )
                 loss_domain = (
-                    loss_domain * pred_sample_weights
-                ).sum() / pred_sample_weights.sum()
+                    loss_domain * domain_weights
+                ).sum() / domain_weights.sum()
             else:
                 loss_domain = F.cross_entropy(
                     domain_pred, domain_label, label_smoothing=label_smoothing

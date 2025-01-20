@@ -18,7 +18,7 @@ from .graph import MosaicDataGraph
 from .dataloader import GraphDataset
 
 # from .loss import graph_mosaic_integration_loss
-from .model import FullModel
+from .model import GMIModel
 from .balance_weights import estimate_balance_weights_glue
 
 
@@ -99,7 +99,7 @@ class EarlyStopper:
 class Trainer:
     def __init__(
         self,
-        model: FullModel,
+        model: GMIModel,
         device: str = "cuda" if torch.cuda.is_available() else "cpu",
         optimizer: Literal["adam", "rmsprop"] = "adam",
         lr: float = 0.001,
@@ -176,16 +176,15 @@ class Trainer:
 
         for batch in tqdm(train_dataset, desc="Batch: ", leave=False):
             loss, loss_dict, others = self.model(
-                batch["pos_edges"],
-                batch["neg_edges"],
-                domain_input=batch["input"] if self.adversarial_training else None,
-                domain_label=batch["label"] if self.adversarial_training else None,
-                node_batch_indice=batch["node_groups"],
+                pos_edges=batch["pos_edges"],
+                neg_edges=batch["neg_edges"],
+                pos_edges_weights=batch.get("edge_weights", None),
+                domain_input=batch.get("input", None),
+                domain_label=batch.get("label", None),
+                domain_weights=batch.get("weight", None),
                 grad_reverse_weight=grad_reverse_weight,
                 label_smoothing=label_smoothing,
-                pos_edges_weights=batch.get("edge_weights", None),
-                pred_sample_weights=batch.get("weight", None),
-                info_nce_temp=info_nce_temp,
+                weighted_softmax_temp=info_nce_temp,
                 clu_loss_temp=clu_loss_temp,
                 cls_loss_weight=cls_loss_weight,
                 clu_loss_weight=clu_loss_weight,
@@ -213,11 +212,10 @@ class Trainer:
                 loss, _, _ = self.model(
                     batch["pos_edges"],
                     batch["neg_edges"],
-                    node_batch_indice=batch["node_groups"],
                     pos_edges_weights=batch.get("edge_weights", None),
                     cls_loss_weight=0.0,  # no calculate loss by setting weight=0
                     clu_loss_weight=0.0,
-                    info_nce_temp=cls_loss_temp,
+                    weighted_softmax_temp=cls_loss_temp,
                 )
 
                 eval_loss += loss.item()
