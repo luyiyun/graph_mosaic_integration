@@ -43,34 +43,34 @@ def train_midas(data_dir, output_dir, max_epochs=2000):
     # 加载配置
     configs = load_config()
     
-    # 修改各模态的编码器和解码器配置
-    # RNA 模态
-    configs['dims_before_enc_rna'] = [8000]
-    configs['dims_after_dec_rna'] = [8000]
-    configs['distribution_dec_rna'] = 'POISSON'
-    configs['lam_recon_rna'] = 1
+    # # 修改各模态的编码器和解码器配置
+    # # RNA 模态
+    # configs['dims_before_enc_rna'] = [8000]
+    # configs['dims_after_dec_rna'] = [8000]
+    # configs['distribution_dec_rna'] = 'POISSON'
+    # configs['lam_recon_rna'] = 1
     
-    # ATAC 模态
-    configs['dims_before_enc_atac'] = [8000]
-    configs['dims_after_dec_atac'] = [8000]
-    configs['distribution_dec_atac'] = 'BERNOULLI'
-    configs['lam_recon_atac'] = 1
+    # # ATAC 模态
+    # configs['dims_before_enc_atac'] = [8000]
+    # configs['dims_after_dec_atac'] = [8000]
+    # configs['distribution_dec_atac'] = 'BERNOULLI'
+    # configs['lam_recon_atac'] = 1
     
-    # ADT 模态
-    configs['dims_before_enc_adt'] = [24]
-    configs['dims_after_dec_adt'] = [24]
-    configs['distribution_dec_adt'] = 'POISSON'
-    configs['lam_recon_adt'] = 1
+    # # ADT 模态
+    # configs['dims_before_enc_adt'] = [24]
+    # configs['dims_after_dec_adt'] = [24]
+    # configs['distribution_dec_adt'] = 'POISSON'
+    # configs['lam_recon_adt'] = 1
     
-    # 共享编码器和解码器配置
-    configs['dims_shared_enc'] = [256, 128]
-    configs['dims_shared_dec'] = [128, 256]
+    # # 共享编码器和解码器配置
+    # configs['dims_shared_enc'] = [256, 128]
+    # configs['dims_shared_dec'] = [128, 256]
     
     # 定义各模态的转换规则
     transform = {
-        'rna': 'log1p',
+        # 'rna': 'log1p',
         'atac': 'binarize',
-        'adt': 'log1p'
+        # 'adt': 'log1p'
     }
     
     # 配置模型

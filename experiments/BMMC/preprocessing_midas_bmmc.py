@@ -21,7 +21,7 @@ def prepare_midas_input(mdata, output_dir, modality_names=None, batch_key='batch
     """
     # 默认模态名称
     if modality_names is None:
-        modality_names = {'rna': 'rna', 'atac': 'atac', 'protein': 'protein'}
+        modality_names = {'rna': 'rna', 'atac': 'atac', 'protein': 'adt'}
     
     # 创建输出目录
     os.makedirs(output_dir, exist_ok=True)
@@ -129,6 +129,21 @@ if __name__ == "__main__":
     print("Loading MuData object...")
     mdata = mu.read(mdata_path)
     print("MuData loaded successfully!")
+    net = mdata.varp['net']
+
+    # 移除不符合条件的细胞
+    cells_to_remove = mdata.obs[
+        (mdata.obs['rna:batch'] == 2) & (mdata.obs['adt:batch'] == 1)
+    ].index
+    cells_to_keep = mdata.obs.index.difference(cells_to_remove)
+    for mod in mdata.mod:
+        module_cells = mdata.mod[mod].obs.index
+        valid_cells = module_cells.intersection(cells_to_keep)
+        mdata.mod[mod] = mdata.mod[mod][valid_cells, :]  # 保留交集细胞
+
+    # 重新构建 MuData 对象
+    mdata = mu.MuData({"rna": mdata.mod['rna'], "atac": mdata.mod['atac'], "adt": mdata.mod['adt']})
+    mdata.varp['net'] = net
     # 调用函数生成 MIDAS 输入
     print("Preparing MIDAS input data...")
     data_config, mask_config, dims_x = prepare_midas_input(

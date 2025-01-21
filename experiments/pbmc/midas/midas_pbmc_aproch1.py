@@ -68,10 +68,10 @@ def train_midas(data_dir, output_dir, max_epochs=2000):
         data_config.append(data_i)
 
     dims_x = {
-        "rna": [1464],  # RNA data is represented as a cell x 200 matrix.
+        "rna": [1462],  # RNA data is represented as a cell x 200 matrix.
         "adt": [209],  # ADT data is represented as a cell x 100 matrix.
         "atac": [
-            8209
+            8151
         ],  # ATAC data is split into multiple chunks with varying dimensions
     }
     # 配置模型
@@ -141,7 +141,7 @@ def save_embeddings_to_h5ad(output_dir, h5ad_path, model, seed):
     print(f"嵌入表示已保存到: {h5ad_path} (种子: {seed})")
 
 
-def run_midas_pipeline(data_dir, output_dir, h5ad_path, max_epochs=1):
+def run_midas_pipeline(data_dir, output_dir, h5ad_path, max_epochs=2000):
     """
     运行完整的 MIDAS 流程，包括训练、生成嵌入表示并保存为 h5ad 文件。
 
@@ -185,7 +185,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--h5ad_name",
         type=str,
-        default="embeddings.h5ad",
+        default="/home/yuyipei/graph_mosaic_integration/result/midas_pbmc/embeddings.h5ad",
         help="保存的 h5ad 文件名",
     )
     args = parser.parse_args()

@@ -135,7 +135,7 @@ def save_embeddings_to_h5ad(output_dir, h5ad_path, model, seed):
     print(f"嵌入表示已保存到: {h5ad_path} (种子: {seed})")
 
 
-def run_midas_pipeline(data_dir, output_dir, h5ad_path, max_epochs=2000):
+def run_midas_pipeline(data_dir, output_dir, h5ad_path, max_epochs=1):
     """
     运行完整的 MIDAS 流程，包括训练、生成嵌入表示并保存为 h5ad 文件。
     

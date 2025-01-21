@@ -133,7 +133,7 @@ if __name__ == "__main__":
     # 调用函数生成 MIDAS 输入
     print("Preparing MIDAS input data...")
     data_config, mask_config, dims_x = prepare_midas_input(
-        mdata, output_dir, modality_names={'rna': 'rna', 'atac': 'atac', 'met': 'met'}
+        mdata, output_dir, modality_names={'rna': 'rna', 'atac': 'atac', 'met': 'adt'}
     )
 
     # 打印生成的配置

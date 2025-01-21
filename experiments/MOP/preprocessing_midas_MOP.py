@@ -21,7 +21,7 @@ def prepare_midas_input(mdata, output_dir, modality_names=None, batch_key='batch
     """
     # 默认模态名称
     if modality_names is None:
-        modality_names = {'rna': 'rna', 'atac': 'atac', 'protein': 'protein'}
+        modality_names = {'rna': 'rna', 'atac': 'atac', 'protein': 'adt'}
     
     # 创建输出目录
     os.makedirs(output_dir, exist_ok=True)
