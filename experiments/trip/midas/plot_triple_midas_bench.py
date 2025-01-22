@@ -18,7 +18,7 @@ label = "cell_type"
 # 加载 AnnData
 adata = sc.read(f'/home/yuyipei/graph_mosaic_integration/result/midas_{dataset}/embeddings.h5ad')
 
-# adata = adata[~adata.obs.index.duplicated(keep='first')]
+adata = adata[~adata.obs.index.duplicated(keep='first')]
 mdata_path = f"/data/share_data/yuytest/gmi_data/{dataset}.h5mu"
 mdata = mu.read(mdata_path)
 
@@ -31,8 +31,8 @@ mdata.obs['label']=mdata.obs[label].copy()
 mdata.obs['batch'] = mdata.obs['batch'].astype('category')
 
 
-# batch_order = mdata.obs["batch"].cat.categories  # 获取 batch 的类别顺序
-batch_order = ["batch_b1-atac", "batch_b2-rna", "batch_b3-methy"]
+batch_order = mdata.obs["batch"].cat.categories  # 获取 batch 的类别顺序
+# batch_order = ["batch_b1-atac", "batch_b2-rna", "batch_b3-methy"]
 # import ipdb;ipdb.set_trace()
 ordered_indices = []
 for batch in batch_order:
@@ -46,7 +46,7 @@ print(mdata.obs['batch'])
 
 obs = mdata.obs.copy()
 X = get_X_from_mudata(mdata, sparse=True, fillna=0)
-
+# import ipdb;ipdb.set_trace()
 mdata = ad.AnnData(X=X)
 
 mdata.obs=obs

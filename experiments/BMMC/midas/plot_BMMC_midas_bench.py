@@ -52,7 +52,7 @@ merge_obs_from_all_modalities(mdata, key="batch")
 mdata.obs['label']=mdata.obs[label].copy()
 mdata.obs['batch'] = mdata.obs['batch'].astype('category')
 
-
+data_dir=f"/data/share_data/yuytest/gmi_data/midas/bmmc_1"
 # batch_order = mdata.obs["batch"].cat.categories  # 获取 batch 的类别顺序
 batch_order = [
     folder for folder in os.listdir(data_dir)
