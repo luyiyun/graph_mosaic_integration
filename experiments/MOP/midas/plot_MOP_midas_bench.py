@@ -13,7 +13,7 @@ sys.path.append(os.path.abspath("src/gmi/mmAAVI"))
 
 from preprocess import merge_obs_from_all_modalities
 
-dataset = "muto"
+dataset = "MOP"
 label = "cell_type"
 # 加载 AnnData
 adata = sc.read(f'/home/yuyipei/graph_mosaic_integration/result/midas_{dataset}/embeddings.h5ad')
@@ -27,6 +27,26 @@ mdata = mu.read(mdata_path)
 # 这里假设 adata 只包含一个模态（例如 RNA），其他模态需要根据实际情况补充
 merge_obs_from_all_modalities(mdata, key=label)
 merge_obs_from_all_modalities(mdata, key="batch")
+
+mdata.obs['label']=mdata.obs[label].copy()
+mdata.obs['batch'] = mdata.obs['batch'].astype('category')
+
+
+# batch_order = mdata.obs["batch"].cat.categories  # 获取 batch 的类别顺序
+batch_order = [
+    folder for folder in os.listdir(data_dir)
+    if os.path.isdir(os.path.join(data_dir, folder))
+    ]
+# import ipdb;ipdb.set_trace()
+ordered_indices = []
+for batch in batch_order:
+    batch_indices = mdata.obs.index[mdata.obs["batch"] == batch]
+    ordered_indices.extend(batch_indices.tolist())
+
+# 重新排序 obs, X 和 obsm
+mdata = mdata[ordered_indices]  # 按照重新排序的索引创建新的 AnnData 对象
+print(mdata.obs['batch'])
+
 obs = mdata.obs.copy()
 X = get_X_from_mudata(mdata, sparse=True, fillna=0)
 

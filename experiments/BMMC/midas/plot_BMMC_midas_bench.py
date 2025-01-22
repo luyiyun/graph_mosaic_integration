@@ -13,25 +13,51 @@ sys.path.append(os.path.abspath("src/gmi/mmAAVI"))
 
 from preprocess import merge_obs_from_all_modalities
 
-dataset = "pbmc"
-label = "coarse_cluster"
+dataset = "bmmc"
+label = "label"
 # 加载 AnnData
 adata = sc.read(f'/home/yuyipei/graph_mosaic_integration/result/midas_{dataset}/embeddings.h5ad')
-
-# adata = adata[~adata.obs.index.duplicated(keep='first')]
 mdata_path = f"/data/share_data/yuytest/gmi_data/{dataset}.h5mu"
 mdata = mu.read(mdata_path)
+net = mdata.varp['net']
+
+# 移除不符合条件的细胞
+cells_to_remove = mdata.obs[
+    (mdata.obs['rna:batch'] == 2) & (mdata.obs['adt:batch'] == 1)
+].index
+cells_to_keep = mdata.obs.index.difference(cells_to_remove)
+for mod in mdata.mod:
+    module_cells = mdata.mod[mod].obs.index
+    valid_cells = module_cells.intersection(cells_to_keep)
+    mdata.mod[mod] = mdata.mod[mod][valid_cells, :]  # 保留交集细胞
+
+# 重新构建 MuData 对象
+mdata = mu.MuData({"rna": mdata.mod['rna'], "atac": mdata.mod['atac'], "adt": mdata.mod['adt']})
+mdata.varp['net'] = net
+
+# 整合标签和批次信息
+mdata = data_infor_integrate(mdata, feature_key="label", saved_feature_name="label", target_attr="obs")
+for mod in ['rna', 'atac', 'adt']:
+    batch_series = mdata.mod[mod].obs['batch']
+    mdata.mod[mod].obs['batch'] = pd.to_numeric(batch_series, errors='coerce').astype('Int64')
+mdata = data_infor_integrate(mdata, feature_key="batch", saved_feature_name="batch", target_attr="obs")
+mdata.obs['batch'] = mdata.obs['batch'].astype(int)
 
 # 将 AnnData 转换为 MuData
 # 假设 adata 包含多个模态的数据（例如 RNA 和 ATAC），需要手动拆分
 # 这里假设 adata 只包含一个模态（例如 RNA），其他模态需要根据实际情况补充
-merge_obs_from_all_modalities(mdata, key="coarse_cluster")
+merge_obs_from_all_modalities(mdata, key=label)
 merge_obs_from_all_modalities(mdata, key="batch")
+
 mdata.obs['label']=mdata.obs[label].copy()
 mdata.obs['batch'] = mdata.obs['batch'].astype('category')
 
 
-batch_order = mdata.obs["batch"].cat.categories  # 获取 batch 的类别顺序
+# batch_order = mdata.obs["batch"].cat.categories  # 获取 batch 的类别顺序
+batch_order = [
+    folder for folder in os.listdir(data_dir)
+    if os.path.isdir(os.path.join(data_dir, folder))
+    ]
 # import ipdb;ipdb.set_trace()
 ordered_indices = []
 for batch in batch_order:
@@ -41,9 +67,6 @@ for batch in batch_order:
 # 重新排序 obs, X 和 obsm
 mdata = mdata[ordered_indices]  # 按照重新排序的索引创建新的 AnnData 对象
 print(mdata.obs['batch'])
-
-
-
 
 obs = mdata.obs.copy()
 X = get_X_from_mudata(mdata, sparse=True, fillna=0)

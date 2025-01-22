@@ -79,7 +79,7 @@ def train_midas(data_dir, output_dir, max_epochs=2000):
     datasets, dims_s, s_joint, combs = MIDAS.configure_data_from_csv(
         data_config, mask_config, transform
     )
-    model = MIDAS.configure_data(configs, datasets, dims_x, dims_s, s_joint, combs)
+    model = MIDAS.configure_data(configs, datasets, dims_x, dims_s, s_joint, combs,batch_size = 2048)
 
     # 打印模型配置以验证
     print("Model configurations:")
@@ -104,7 +104,7 @@ def train_midas(data_dir, output_dir, max_epochs=2000):
         joint_latent=True,
         mod_latent=False,
         impute=False,
-        batch_correct=False,
+        batch_correct=True,
         translate=False,
         input=False,
     )
