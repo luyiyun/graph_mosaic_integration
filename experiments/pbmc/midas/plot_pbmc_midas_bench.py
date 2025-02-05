@@ -17,7 +17,6 @@ dataset = "pbmc"
 label = "coarse_cluster"
 # 加载 AnnData
 adata = sc.read(f'/home/yuyipei/graph_mosaic_integration/result/midas_{dataset}/embeddings.h5ad')
-
 # adata = adata[~adata.obs.index.duplicated(keep='first')]
 mdata_path = f"/data/share_data/yuytest/gmi_data/{dataset}.h5mu"
 mdata = mu.read(mdata_path)

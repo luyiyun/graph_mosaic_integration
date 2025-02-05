@@ -13,14 +13,37 @@ sys.path.append(os.path.abspath("src/gmi/mmAAVI"))
 
 from preprocess import merge_obs_from_all_modalities
 
-dataset = "muto"
-label = "cell_type"
+dataset = "bmmc"
+label = "label"
 # 加载 AnnData
-adata = sc.read(f'/home/yuyipei/graph_mosaic_integration/result/midas_{dataset}/embeddings.h5ad')
-
-# adata = adata[~adata.obs.index.duplicated(keep='first')]
+adata = sc.read(f'/home/yuyipei/graph_mosaic_integration/result/harmony_{dataset}/embeddings.h5ad')
 mdata_path = f"/data/share_data/yuytest/gmi_data/{dataset}.h5mu"
+
 mdata = mu.read(mdata_path)
+print(mdata)
+net = mdata.varp['net']
+
+# # 移除不符合条件的细胞
+# cells_to_remove = mdata.obs[
+#     (mdata.obs['rna:batch'] == 2) & (mdata.obs['adt:batch'] == 1)
+# ].index
+# cells_to_keep = mdata.obs.index.difference(cells_to_remove)
+# for mod in mdata.mod:
+#     module_cells = mdata.mod[mod].obs.index
+#     valid_cells = module_cells.intersection(cells_to_keep)
+#     mdata.mod[mod] = mdata.mod[mod][valid_cells, :]  # 保留交集细胞
+
+# 重新构建 MuData 对象
+mdata = mu.MuData({"rna": mdata.mod['rna'], "atac": mdata.mod['atac'], "adt": mdata.mod['adt']})
+mdata.varp['net'] = net
+
+# 整合标签和批次信息
+mdata = data_infor_integrate(mdata, feature_key="label", saved_feature_name="label", target_attr="obs")
+for mod in ['rna', 'atac', 'adt']:
+    batch_series = mdata.mod[mod].obs['batch']
+    mdata.mod[mod].obs['batch'] = pd.to_numeric(batch_series, errors='coerce').astype('Int64')
+mdata = data_infor_integrate(mdata, feature_key="batch", saved_feature_name="batch", target_attr="obs")
+mdata.obs['batch'] = mdata.obs['batch'].astype(int)
 
 # 将 AnnData 转换为 MuData
 # 假设 adata 包含多个模态的数据（例如 RNA 和 ATAC），需要手动拆分
@@ -31,27 +54,9 @@ merge_obs_from_all_modalities(mdata, key="batch")
 mdata.obs['label']=mdata.obs[label].copy()
 mdata.obs['batch'] = mdata.obs['batch'].astype('category')
 
-
-# batch_order = mdata.obs["batch"].cat.categories  # 获取 batch 的类别顺序
-data_dir = "/data/share_data/yuytest/gmi_data/midas/muto_1"
-batch_order = [
-    folder for folder in os.listdir(data_dir)
-    if os.path.isdir(os.path.join(data_dir, folder))
-    ]
-
-ordered_indices = []
-
-for batch in batch_order:
-    batch_indices = mdata.obs.index[mdata.obs["batch"] == batch[6:]]
-    ordered_indices.extend(batch_indices.tolist())
-
-# 重新排序 obs, X 和 obsm
-mdata = mdata[ordered_indices]  # 按照重新排序的索引创建新的 AnnData 对象
-print(mdata.obs['batch'])
-
 obs = mdata.obs.copy()
 X = get_X_from_mudata(mdata, sparse=True, fillna=0)
-# import ipdb;ipdb.set_trace()
+
 mdata = ad.AnnData(X=X)
 
 mdata.obs=obs
@@ -64,12 +69,12 @@ print("Converted AnnData to MuData.")
 
 # 定义参数
 num_cell = adata.shape[0]  # 使用的细胞数量
-result_dir = f'/home/yuyipei/graph_mosaic_integration/result/midas_{dataset}'  # 结果保存目录
+result_dir = f'/home/yuyipei/graph_mosaic_integration/result/harmony_{dataset}'  # 结果保存目录
 os.makedirs(result_dir, exist_ok=True)  # 创建结果目录
 
 # 运行基准测试并保存结果
 results_list = []
-for key in ['X_midas_1','X_midas_2','X_midas_3','X_midas_4','X_midas_5']:
+for key in ['Harmony_1','Harmony_2','Harmony_3','Harmony_4','Harmony_5']:
     if key in mdata.obsm:
         print(f"Running benchmark for {key}...")
         result_dirs = os.path.join(result_dir, key)
@@ -151,7 +156,7 @@ for key in ['X_midas_1','X_midas_2','X_midas_3','X_midas_4','X_midas_5']:
 if results_list:
     combined_results = pd.concat(results_list, axis=1)
     combined_results.columns = [f"{key}_{col}" for key, df in zip(
-        ['X_midas_1','X_midas_2','X_midas_3','X_midas_4','X_midas_5'],
+        ['Harmony_1','Harmony_2','Harmony_3','Harmony_4','Harmony_5'],
         results_list
     ) for col in df.columns]
     

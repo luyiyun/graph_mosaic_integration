@@ -123,6 +123,7 @@ if __name__ == "__main__":
     # 加载 MuData 对象
     print("加载 MuData 对象...")
     mdata = mu.read(mdata_path)
+    print(mdata)
     print("MuData 加载成功!")
 
     # 调用函数生成 MIDAS 输入

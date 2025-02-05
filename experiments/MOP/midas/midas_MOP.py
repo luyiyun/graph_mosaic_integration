@@ -140,7 +140,7 @@ def run_midas_pipeline(data_dir, output_dir, h5ad_path, max_epochs=2000):
         max_epochs: int, 最大训练轮数，默认为 2000。
     """
     # 定义 5 个不同的随机种子
-    seeds = [1, 2, 3, 4, 5]
+    seeds = [3, 4, 5]
 
     for seed in seeds:
         print(f"使用随机种子: {seed}")

@@ -18,6 +18,7 @@ label = "label"
 # 加载 AnnData
 adata = sc.read(f'/home/yuyipei/graph_mosaic_integration/result/midas_{dataset}/embeddings.h5ad')
 mdata_path = f"/data/share_data/yuytest/gmi_data/{dataset}.h5mu"
+
 mdata = mu.read(mdata_path)
 net = mdata.varp['net']
 
@@ -58,12 +59,12 @@ batch_order = [
     folder for folder in os.listdir(data_dir)
     if os.path.isdir(os.path.join(data_dir, folder))
     ]
-# import ipdb;ipdb.set_trace()
+
 ordered_indices = []
 for batch in batch_order:
-    batch_indices = mdata.obs.index[mdata.obs["batch"] == batch]
+    batch_indices = mdata.obs.index[mdata.obs["batch"] == int(batch[6:])]
     ordered_indices.extend(batch_indices.tolist())
-
+# import ipdb;ipdb.set_trace()
 # 重新排序 obs, X 和 obsm
 mdata = mdata[ordered_indices]  # 按照重新排序的索引创建新的 AnnData 对象
 print(mdata.obs['batch'])

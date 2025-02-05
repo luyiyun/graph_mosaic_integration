@@ -82,7 +82,7 @@ def train_midas(data_dir, output_dir, max_epochs=2000):
     datasets, dims_s, s_joint, combs = MIDAS.configure_data_from_csv(
         data_config, mask_config, transform
     )
-    model = MIDAS.configure_data(configs, datasets, dims_x, dims_s, s_joint, combs,batch_size = 2048)
+    model = MIDAS.configure_data(configs, datasets, dims_x, dims_s, s_joint, combs,batch_size = 8192)
 
     # 打印模型配置以验证
     print("Model configurations:")
@@ -127,7 +127,7 @@ def save_embeddings_to_h5ad(output_dir, h5ad_path, model, seed):
         seed: int, 当前随机种子。
     """
     # 加载联合嵌入
-    joint_embeddings = load_predicted(output_dir, model.combs, joint_latent=True)
+    joint_embeddings = load_predicted(output_dir, model.combs, joint_latent=True,batch_correct=True,translate=True)
 
     # 如果 h5ad 文件已存在，则加载它
     if os.path.exists(h5ad_path):
@@ -137,7 +137,8 @@ def save_embeddings_to_h5ad(output_dir, h5ad_path, model, seed):
         adata = ad.AnnData(X=np.zeros((joint_embeddings["z"]["joint"].shape[0], 1)))
 
     # 将当前嵌入保存到 obsm 中，命名为 X_midas_{种子数}
-    adata.obsm[f"X_midas_{seed}"] = joint_embeddings["z"]["joint"]
+    adata.obsm[f"X_midas_{seed}"] = joint_embeddings["z"]["joint"][:,:model.dim_c]
+    adata.obsm[f"X_midas_{seed}_tech"] = joint_embeddings["z"]["joint"][:,model.dim_c:]
 
     # 保存为 h5ad 文件
     adata.write(h5ad_path)
@@ -155,7 +156,7 @@ def run_midas_pipeline(data_dir, output_dir, h5ad_path, max_epochs=2000):
         max_epochs: int, 最大训练轮数，默认为 2000。
     """
     # 定义 5 个不同的随机种子
-    seeds = [1, 2, 3, 4, 5]
+    seeds = [1,2,3,4,5]
 
     for seed in seeds:
         print(f"使用随机种子: {seed}")
