@@ -14,7 +14,7 @@ from gmi.metric import get_X_from_mudata
 dataset = "triple"
 label = "cell_type"
 # 定义结果目录
-result_dir = f"/home/yuyipei/graph_mosaic_integration/result/{dataset}_glue"
+result_dir = f"/home/yuyipei/graph_mosaic_integration/result/glue_{dataset}"
 os.makedirs(result_dir, exist_ok=True)
 
 # 遍历 trip_glue 文件夹中的所有子文件夹，提取 glue_trip_embedding.h5ad 文件

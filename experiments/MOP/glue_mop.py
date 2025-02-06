@@ -18,7 +18,7 @@ from gmi import (
 
 # 设置路径
 mdata_path = "/data/share_data/yuytest/gmi_data/MOP.h5mu"
-result_path = "./result/MOP_glue"
+result_path = "./result/glue_MOP"
 os.makedirs(result_path, exist_ok=True)
 
 # 读取数据

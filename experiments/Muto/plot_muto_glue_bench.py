@@ -11,7 +11,7 @@ from gmi.metric import get_X_from_mudata
 dataset = "muto"
 label = "cell_type"
 # 加载 AnnData
-adata = sc.read(f'/home/yuyipei/graph_mosaic_integration/result/{dataset}_glue/glue_{dataset}_embedding.h5ad')
+adata = sc.read(f'/home/yuyipei/graph_mosaic_integration/result/glue_{dataset}/glue_{dataset}_embedding.h5ad')
 mdata_path = f"/data/share_data/yuytest/gmi_data/{dataset}.h5mu"
 mdata = mu.read(mdata_path)
 print(mdata)

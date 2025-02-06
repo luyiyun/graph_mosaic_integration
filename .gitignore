@@ -19,3 +19,5 @@ glue/
 glue_full/
 saved_models/
 lightning_logs/
+bedtools2/
+*.gz
