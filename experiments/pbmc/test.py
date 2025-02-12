@@ -420,24 +420,23 @@ def main():
         # 设定参数
         gmi_model = GraphMosaicIntegration(
             label_smoothing=0.1,
-            alpha=0.2,
-            loss_alpha=0.2,
             adversarial_training=True,
             adversarial_batching_method="divide",
             val_split=0.1,
             patience=10,
             num_epochs=200,
-            late_join_alpha=0,
-            late_join_loss_alpha=0,
             device="cuda:0",
             adversartial_balance_weights=False,
             num_epochs_with_balanced_weights=20,
             learning_rate=0.005,
             add_batch_embedding=True,
             bilinear=True,
-            num_cluster=4,
-            clu_loss_weight=0.0005,
-            late_join_clu_weight=100,
+            w_grad_rev=0.2,
+            w_loss_cls=0.2,
+            w_cov=1e-3,
+            # num_cluster=4,
+            # w_loss_clu=0.0,
+            # late_join_clu_weight=100,
         )
         gmi_model.fit(mdata, batch_key="batch", feature_interaction_key="net")
         gmi_model.save(result_path)
@@ -494,14 +493,14 @@ def main():
 
 
 if __name__ == "__main__":
-    # main()
-    a0 = 0.1
-    i = np.linspace(2, 40, num=100)
-    mul = 2 ** (1 / np.log(i)) ** 2
-    mul = np.r_[1.0, np.cumprod(mul)]
-    alpha = mul * a0
-
-    plt.plot(np.arange(len(alpha)), alpha)
-    plt.xlabel("Number of Clusters")
-    plt.ylabel("Alpha")
-    plt.show()
+    main()
+    # a0 = 0.1
+    # i = np.linspace(2, 40, num=100)
+    # mul = 2 ** (1 / np.log(i)) ** 2
+    # mul = np.r_[1.0, np.cumprod(mul)]
+    # alpha = mul * a0
+    #
+    # plt.plot(np.arange(len(alpha)), alpha)
+    # plt.xlabel("Number of Clusters")
+    # plt.ylabel("Alpha")
+    # plt.show()

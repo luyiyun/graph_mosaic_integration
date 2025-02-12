@@ -11,14 +11,15 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from sklearn.model_selection import train_test_split
-from sklearn.cluster import KMeans
+
+# from sklearn.cluster import KMeans
 from tqdm.contrib.logging import logging_redirect_tqdm
 
 from .graph import MosaicDataGraph
 from .dataloader import GraphDataset
 
 # from .loss import graph_mosaic_integration_loss
-from .model import GMIModel
+from .model import GMIModel, WEIGHT, WEIGHTS
 from .balance_weights import estimate_balance_weights_glue
 
 
@@ -109,12 +110,12 @@ class Trainer:
         adversarial_with_feature_nodes: bool = False,
         batch_size: int = 128,
         disc_node_num_per_batch: int = 200,
-        label_smoothing: float | Sequence[int] = 0.1,
-        grad_reverse_weight: float | Sequence[int] = 0.2,
-        cls_loss_weight: float | Sequence[int] = 0.2,
-        clu_loss_weight: float | Sequence[int] = 0.0,
-        cls_loss_temp: float | Sequence[int] = 1.0,
-        clu_loss_temp: float | Sequence[int] = 1.0,
+        # label_smoothing: float | Sequence[int] = 0.1,
+        # grad_reverse_weight: float | Sequence[int] = 0.2,
+        # cls_loss_weight: float | Sequence[int] = 0.2,
+        # clu_loss_weight: float | Sequence[int] = 0.0,
+        # cls_loss_temp: float | Sequence[int] = 1.0,
+        # clu_loss_temp: float | Sequence[int] = 1.0,
         neg_sampling_mode: Literal["full", "matched", "bipartitle"] = "matched",
         loss_type: Literal["margin_ranking, weighted_softmax"] = "margin_ranking",
         patience: int | float = 5,  # inf or np.inf表示不使用早停
@@ -131,12 +132,12 @@ class Trainer:
         # TODO: now the seed can only control the randomness of the data split
         self.random_seed = random_seed
 
-        self.label_smoothing = label_smoothing
-        self.grad_reverse_weight = grad_reverse_weight
-        self.cls_loss_weight = cls_loss_weight
-        self.clu_loss_weight = clu_loss_weight
-        self.cls_loss_temp = cls_loss_temp
-        self.clu_loss_temp = clu_loss_temp
+        # self.label_smoothing = label_smoothing
+        # self.grad_reverse_weight = grad_reverse_weight
+        # self.cls_loss_weight = cls_loss_weight
+        # self.clu_loss_weight = clu_loss_weight
+        # self.cls_loss_temp = cls_loss_temp
+        # self.clu_loss_temp = clu_loss_temp
 
         if adversarial_with_feature_nodes:
             raise NotImplementedError("adversarial_with_feature_nodes not implemented")
@@ -165,12 +166,7 @@ class Trainer:
     def train_epoch(
         self,
         train_dataset: GraphDataset,
-        grad_reverse_weight: float = 1.0,
-        cls_loss_weight: float = 1.0,
-        clu_loss_weight: float = 1.0,
-        label_smoothing: float = 0.0,
-        info_nce_temp: float = 1.0,
-        clu_loss_temp: float = 1.0,
+        **weights: WEIGHT,
     ):
         self.model.train()
 
@@ -182,12 +178,7 @@ class Trainer:
                 domain_input=batch.get("input", None),
                 domain_label=batch.get("label", None),
                 domain_weights=batch.get("weight", None),
-                grad_reverse_weight=grad_reverse_weight,
-                label_smoothing=label_smoothing,
-                weighted_softmax_temp=info_nce_temp,
-                clu_loss_temp=clu_loss_temp,
-                cls_loss_weight=cls_loss_weight,
-                clu_loss_weight=clu_loss_weight,
+                **weights,
             )
 
             # 反向传播与优化
@@ -200,8 +191,11 @@ class Trainer:
             if "pred" in others:
                 self._evaluator.see(others["pred"], batch["label"])
 
-    def evaluate(
-        self, eval_dataset: GraphDataset, cls_loss_temp: float = 1.0
+    def eval_epoch(
+        self,
+        eval_dataset: GraphDataset,
+        w_infonce_temp: float,
+        w_cov: float,
     ) -> torch.Tensor:
         self.model.eval()
         # 开始评估
@@ -213,9 +207,11 @@ class Trainer:
                     batch["pos_edges"],
                     batch["neg_edges"],
                     pos_edges_weights=batch.get("edge_weights", None),
-                    cls_loss_weight=0.0,  # no calculate loss by setting weight=0
-                    clu_loss_weight=0.0,
-                    weighted_softmax_temp=cls_loss_temp,
+                    domain_input=None,
+                    w_infonce_temp=w_infonce_temp,
+                    w_loss_cls=0.0,
+                    w_loss_clu=0.0,
+                    w_cov=w_cov,
                 )
 
                 eval_loss += loss.item()
@@ -230,6 +226,7 @@ class Trainer:
         num_neg_per_pos: int = 5,
         num_epochs: int = 100,
         val_split: float | None = 0.2,
+        **weights: WEIGHTS,
     ):
         # NOTE: 现在train test split是放在epoch循环的外面,
         #       这样能够保证valid时模型是无法看到test数据的
@@ -273,37 +270,38 @@ class Trainer:
                 **dataset_kwargs,
             )
 
-        grad_reverse_weight = (
-            [self.grad_reverse_weight] * num_epochs
-            if isinstance(self.grad_reverse_weight, (float, int))
-            else self.grad_reverse_weight
-        )
-        cls_loss_weight = (
-            [self.cls_loss_weight] * num_epochs
-            if isinstance(self.cls_loss_weight, (float, int))
-            else self.cls_loss_weight
-        )
-        clu_loss_weight = (
-            [self.clu_loss_weight] * num_epochs
-            if isinstance(self.clu_loss_weight, (float, int))
-            else self.clu_loss_weight
-        )
-        label_smoothing = (
-            [self.label_smoothing] * num_epochs
-            if isinstance(self.label_smoothing, (float, int))
-            else self.label_smoothing
-        )
-        cls_loss_temp = (
-            [self.cls_loss_temp] * num_epochs
-            if isinstance(self.cls_loss_temp, (float, int))
-            else self.cls_loss_temp
-        )
-        clu_loss_temp = (
-            [self.clu_loss_temp] * num_epochs
-            if isinstance(self.clu_loss_temp, (float, int))
-            else self.clu_loss_temp
-        )
-        flag_kmeans = True
+        # grad_reverse_weight = (
+        #     [self.grad_reverse_weight] * num_epochs
+        #     if isinstance(self.grad_reverse_weight, (float, int))
+        #     else self.grad_reverse_weight
+        # )
+        # cls_loss_weight = (
+        #     [self.cls_loss_weight] * num_epochs
+        #     if isinstance(self.cls_loss_weight, (float, int))
+        #     else self.cls_loss_weight
+        # )
+        # clu_loss_weight = (
+        #     [self.clu_loss_weight] * num_epochs
+        #     if isinstance(self.clu_loss_weight, (float, int))
+        #     else self.clu_loss_weight
+        # )
+        # label_smoothing = (
+        #     [self.label_smoothing] * num_epochs
+        #     if isinstance(self.label_smoothing, (float, int))
+        #     else self.label_smoothing
+        # )
+        # cls_loss_temp = (
+        #     [self.cls_loss_temp] * num_epochs
+        #     if isinstance(self.cls_loss_temp, (float, int))
+        #     else self.cls_loss_temp
+        # )
+        # clu_loss_temp = (
+        #     [self.clu_loss_temp] * num_epochs
+        #     if isinstance(self.clu_loss_temp, (float, int))
+        #     else self.clu_loss_temp
+        # )
+
+        # flag_kmeans = True
         eval_losses = []
         with logging_redirect_tqdm():
             for epoch in tqdm(range(num_epochs), desc="Epoch: "):
@@ -325,35 +323,33 @@ class Trainer:
                 # eval_edge_weights = (
                 #     edge_weights[val_indices] if self.use_weights else None
                 # )
-                if (
-                    self.model.n_cluster is not None
-                    and clu_loss_weight[epoch] > 0.0
-                    and flag_kmeans
-                ):
-                    flag_kmeans = False
-                    tqdm.write("Estimate cluster centers by KMeans")
-                    # use kmeans to initialized the cluster centers
-                    cell_embeds = (
-                        self.model.node_embedding.weight.data[: self.graph.n_cells]
-                        .detach()
-                        .cpu()
-                        .numpy()
-                    )
-                    kmeans = KMeans(n_clusters=self.model.n_cluster).fit(cell_embeds)
-                    self.model.cluster_embedding.data = torch.tensor(
-                        kmeans.cluster_centers_, dtype=torch.float32, device=self.device
-                    )
+                # NOTE: Use kmeans to initial cluster centers
+                # if (
+                #     self.model.n_cluster is not None
+                #     and clu_loss_weight[epoch] > 0.0
+                #     and flag_kmeans
+                # ):
+                #     flag_kmeans = False
+                #     tqdm.write("Estimate cluster centers by KMeans")
+                #     # use kmeans to initialized the cluster centers
+                #     cell_embeds = (
+                #         self.model.node_embedding.weight.data[: self.graph.n_cells]
+                #         .detach()
+                #         .cpu()
+                #         .numpy()
+                #     )
+                #     kmeans = KMeans(n_clusters=self.model.n_cluster).fit(cell_embeds)
+                #     self.model.cluster_embedding.data = torch.tensor(
+                #         kmeans.cluster_centers_, dtype=torch.float32, device=self.device
+                #     )
+
+                weights_e = {
+                    k: v[epoch] if isinstance(v, Sequence) else v
+                    for k, v in weights.items()
+                }
 
                 # 训练阶段
-                self.train_epoch(
-                    train_dataset,
-                    grad_reverse_weight=grad_reverse_weight[epoch],
-                    label_smoothing=label_smoothing[epoch],
-                    info_nce_temp=cls_loss_temp[epoch],
-                    clu_loss_temp=clu_loss_temp[epoch],
-                    cls_loss_weight=cls_loss_weight[epoch],
-                    clu_loss_weight=clu_loss_weight[epoch],
-                )
+                self.train_epoch(train_dataset, **weights_e)
                 train_losses = self._loss_accumulator.cal()
                 domain_cls_acc = self._evaluator.cal()
                 tqdm.write(
@@ -367,8 +363,10 @@ class Trainer:
                 )
                 # 验证阶段
                 if val_split is not None:
-                    eval_loss = self.evaluate(
-                        valid_dataset, cls_loss_temp=cls_loss_temp[epoch]
+                    eval_loss = self.eval_epoch(
+                        valid_dataset,
+                        w_infonce_temp=weights_e.get("w_infonce_temp", 1.0),
+                        w_cov=0.0,  # TODO: weights_e.get("w_cov", 0.0),
                     )
                     eval_losses.append(eval_loss)
                     tqdm.write(

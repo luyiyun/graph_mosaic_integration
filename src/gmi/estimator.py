@@ -51,20 +51,47 @@ class GraphMosaicIntegration:
     adversartial_balance_weights: bool = False
     num_epochs_with_balanced_weights: int = 50
     disc_node_num_per_batch: int = 200
-    label_smoothing: float = 0.1
-    alpha: float = 0.1
-    loss_alpha: float = 0.2
     neg_sampling_mode: Literal["full", "matched", "bipartitle"] = "matched"
     loss_type: Literal["margin_ranking", "weighted_softmax"] = "weighted_softmax"
-    late_join_loss_alpha: int = 5
-    late_join_alpha: int = 5
     patience: int | float = 5  # inf or np.inf表示不使用早停
     random_seed: int = 0
-    # std_loss_alpha: float = 0.0
     bilinear: bool = False
     num_cluster: int | None = None
-    clu_loss_weight: float = 0.1
-    late_join_clu_weight: int = 100
+    label_smoothing: float = 0.1
+    w_grad_rev: float = 0.1
+    w_loss_cls: float = 0.2
+    w_loss_clu: float = 0.1
+    w_infonce_temp: float = 1.0
+    w_clu_temp: float = 1.0
+    w_cov: float = 0.0
+    late_join_weights: dict[str, int] | None = None
+
+    def __post_init__(self):
+        assert (
+            not self.adversartial_balance_weights
+        ), "adversartial_balance_weights is not supported yet!"
+
+        self.late_join_weights = self.late_join_weights or {}
+
+        weight_names = [
+            "label_smoothing",
+            "w_grad_rev",
+            "w_loss_cls",
+            "w_loss_clu",
+            "w_infonce_temp",
+            "w_clu_temp",
+            "w_cov",
+        ]
+        assert all(k in weight_names for k in self.late_join_weights)
+        self.weights = {}
+        for k in weight_names:
+            if k in self.late_join_weights:
+                n_epochs_zero = self.late_join_weights[k]
+                self.weights[k] = [0] * n_epochs_zero + [getattr(self, k)] * (
+                    self.num_epochs - n_epochs_zero
+                )
+            else:
+                self.weights[k] = getattr(self, k)
 
     def fit(
         self,
@@ -225,12 +252,12 @@ class GraphMosaicIntegration:
         )
 
         # 初始化训练器
-        alpha = np.zeros(self.num_epochs)
-        alpha[self.late_join_alpha :] = self.alpha
-        loss_alpha = np.zeros(self.num_epochs)
-        loss_alpha[self.late_join_loss_alpha :] = self.loss_alpha
-        loss_clu_weight = np.zeros(self.num_epochs)
-        loss_clu_weight[self.late_join_clu_weight :] = self.clu_loss_weight
+        # alpha = np.zeros(self.num_epochs)
+        # alpha[self.late_join_alpha :] = self.w_grad_rev
+        # loss_alpha = np.zeros(self.num_epochs)
+        # loss_alpha[self.late_join_loss_alpha :] = self.w_loss_cls
+        # loss_clu_weight = np.zeros(self.num_epochs)
+        # loss_clu_weight[self.late_join_clu_weight :] = self.w_loss_clu
         self.trainer = Trainer(
             model=self.model,
             device=self.device,
@@ -246,10 +273,10 @@ class GraphMosaicIntegration:
             loss_type=self.loss_type,
             patience=self.patience,
             random_seed=self.random_seed,
-            label_smoothing=self.label_smoothing,
-            grad_reverse_weight=alpha,
-            cls_loss_weight=loss_alpha,
-            clu_loss_weight=loss_clu_weight,
+            # label_smoothing=self.label_smoothing,
+            # grad_reverse_weight=alpha,
+            # cls_loss_weight=loss_alpha,
+            # clu_loss_weight=loss_clu_weight,
             # clu_loss_temp=loss_clu_temp,
         )
 
@@ -258,45 +285,46 @@ class GraphMosaicIntegration:
             num_neg_per_pos=self.num_neg_per_pos,
             num_epochs=self.num_epochs,
             val_split=self.val_split,
+            **self.weights,
         )
 
         if not self.adversartial_balance_weights:
             return
 
-        # 训练 adversarial_training 后，再训练一次，使用平衡的权重
-        print("Estimate balance weights...")
-        balanced_weights = self.trainer.estimate_balance_weights()
-        graph.nodes_adversarial_weights = balanced_weights
-        # 重新构建新的训练流程
-        print("Retrain with balanced weights...")
-        self.trainer_balanced = Trainer(
-            model=self.model,
-            device=self.device,
-            optimizer=self.optimizer,
-            lr=self.learning_rate * 0.1,
-            neg_sample_in_batch=self.neg_sample_in_batch,
-            adversarial_training=self.adversarial_training,
-            adversarial_batching_method=self.adversarial_batching_method,
-            adversarial_with_feature_nodes=False,
-            batch_size=self.batch_size,
-            disc_node_num_per_batch=self.disc_node_num_per_batch,
-            label_smoothing=self.label_smoothing,
-            alpha=self.alpha,
-            loss_alpha=self.loss_alpha,
-            neg_sampling_mode=self.neg_sampling_mode,
-            loss_type=self.loss_type,
-            late_join_alpha=0,
-            late_join_loss_alpha=0,
-            patience=self.patience,
-            random_seed=self.random_seed,
-            std_loss_alpha=self.std_loss_alpha,
-        )
-        self.trainer_balanced.train(
-            graph=graph,
-            num_neg_per_pos=self.num_neg_per_pos,
-            num_epochs=self.num_epochs_with_balanced_weights,
-            val_split=self.val_split,
-        )
+        # # 训练 adversarial_training 后，再训练一次，使用平衡的权重
+        # print("Estimate balance weights...")
+        # balanced_weights = self.trainer.estimate_balance_weights()
+        # graph.nodes_adversarial_weights = balanced_weights
+        # # 重新构建新的训练流程
+        # print("Retrain with balanced weights...")
+        # self.trainer_balanced = Trainer(
+        #     model=self.model,
+        #     device=self.device,
+        #     optimizer=self.optimizer,
+        #     lr=self.learning_rate * 0.1,
+        #     neg_sample_in_batch=self.neg_sample_in_batch,
+        #     adversarial_training=self.adversarial_training,
+        #     adversarial_batching_method=self.adversarial_batching_method,
+        #     adversarial_with_feature_nodes=False,
+        #     batch_size=self.batch_size,
+        #     disc_node_num_per_batch=self.disc_node_num_per_batch,
+        #     label_smoothing=self.label_smoothing,
+        #     alpha=self.w_grad_rev,
+        #     loss_alpha=self.w_loss_cls,
+        #     neg_sampling_mode=self.neg_sampling_mode,
+        #     loss_type=self.loss_type,
+        #     late_join_alpha=0,
+        #     late_join_loss_alpha=0,
+        #     patience=self.patience,
+        #     random_seed=self.random_seed,
+        #     std_loss_alpha=self.std_loss_alpha,
+        # )
+        # self.trainer_balanced.train(
+        #     graph=graph,
+        #     num_neg_per_pos=self.num_neg_per_pos,
+        #     num_epochs=self.num_epochs_with_balanced_weights,
+        #     val_split=self.val_split,
+        # )
 
     def save(self, path: str):
         os.makedirs(path, exist_ok=True)
