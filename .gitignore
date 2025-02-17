@@ -21,3 +21,4 @@ saved_models/
 lightning_logs/
 bedtools2/
 *.gz
+=1.8.0
