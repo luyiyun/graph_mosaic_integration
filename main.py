@@ -38,7 +38,7 @@ for i in [0.04]:
     )
     batch_mapping = {category: idx + 1 for idx, category in enumerate(mdata.obs['batch'].cat.categories)}
     mdata.obs['batch'] = mdata.obs['batch'].map(batch_mapping)
-    # import ipdb; ipdb.set_trace()
+    #  import ipdb; ipdb.set_trace()
     num_neg_per_pos=4
     label_smoothing =0.1
     alpha=i

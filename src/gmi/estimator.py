@@ -154,7 +154,6 @@ class GraphMosaicIntegration:
             # 将细胞和特征映射到全局索引表中的序列号
             mapped_batches = nodes_df.loc[cell_indices[row_indices], "idx"].values
             mapped_features = nodes_df.loc[feature_indices[col_indices], "idx"].values
-
             # 创建临时 DataFrame
             edge_df = pd.DataFrame(
                 {
