@@ -36,7 +36,7 @@ class AttentionLayer(nn.Module):
     def __init__(self, input_dim=1, output_dim=1):
         super(AttentionLayer, self).__init__()
         self.fc1 = nn.Linear(input_dim, 64)  # 第一层线性变换
-        self.fc2 = nn.Linear(64, 32)         # 第二层线性变换
+        self.fc2 = nn.Linear(64, 32)  # 第二层线性变换
         self.fc3 = nn.Linear(32, output_dim)  # 输出层
         self.relu = nn.ReLU()  # 激活函数
 
@@ -50,7 +50,6 @@ class AttentionLayer(nn.Module):
         return x
 
 
-    
 @dataclass
 class GraphMosaicIntegration:
     embedding_dim: int = 50
@@ -60,35 +59,56 @@ class GraphMosaicIntegration:
     learning_rate: float = 0.01
     num_neg_per_pos: int = 4
     num_epochs: int = 100
+    num_epochs_with_balanced_weights: int = 0
     batch_size: int = 131072
     val_split: float = 0.2  # 验证集比例
     # add_feature_net: bool = True
     neg_sample_in_batch: bool = False
     device: str = "cuda"
     optimizer: Literal["adam", "rmsprop"] = "adam"
-    adversarial_training: bool = True
     adversarial_batching_method: Literal["unique", "divide", "random"] = "divide"
     adversartial_balance_weights: bool = False
-    num_epochs_with_balanced_weights: int = 50
     disc_node_num_per_batch: int = 200
-    label_smoothing: float = 0.1
-    alpha: float = 0.1
-    loss_alpha: float = 0.2
     neg_sampling_mode: Literal["full", "matched", "bipartitle"] = "matched"
     loss_type: Literal["margin_ranking", "weighted_softmax"] = "weighted_softmax"
-    late_join_loss_alpha: int = 5
-    late_join_alpha: int = 5
     patience: int | float = 5  # inf or np.inf表示不使用早停
     random_seed: int = 0
-    # std_loss_alpha: float = 0.0
     bilinear: bool = False
     num_cluster: int | None = None
-    clu_loss_weight: float = 0.1
-    late_join_clu_weight: int = 100
-    use_spatial_distance: bool = True  # 添加开关参数
-    distance_threshold: float = 50  # 设定一个空间距离阈值
-    sigma: float = 0.00007  # 控制距离对边权重的影响
-    weight_type: Literal["exp","attention"] = "attention" 
+    label_smoothing: float = 0.1
+    w_grad_rev: float = 0.1
+    w_loss_cls: float = 0.2
+    w_loss_clu: float = 0.1
+    w_infonce_temp: float = 1.0
+    w_clu_temp: float = 1.0
+    w_cov: float = 0.0
+    w_dist: float = 0.0
+    late_join_weights: dict[str, int] | None = None
+
+    def __post_init__(self):
+        self.late_join_weights = self.late_join_weights or {}
+
+        weight_names = [
+            "label_smoothing",
+            "w_grad_rev",
+            "w_loss_cls",
+            "w_loss_clu",
+            "w_infonce_temp",
+            "w_clu_temp",
+            "w_cov",
+            "w_dist",
+        ]
+        assert all(k in weight_names for k in self.late_join_weights)
+        self.weights = {}
+        for k in weight_names:
+            if k in self.late_join_weights:
+                n_epochs_zero = self.late_join_weights[k]
+                self.weights[k] = [0] * n_epochs_zero + [getattr(self, k)] * (
+                    self.num_epochs - n_epochs_zero
+                )
+            else:
+                self.weights[k] = getattr(self, k)
+
     def fit(
         self,
         mdata: mu.MuData,
@@ -115,10 +135,9 @@ class GraphMosaicIntegration:
         batch_key: str | None,
         log_norm: bool = True,
         feature_interaction_key: str | None = None,
-
     ) -> MosaicDataGraph:
         # mdata -> graph
-        
+
         # get all nodes
         indice = mdata.obs.index.tolist() + mdata.var.index.tolist()
         group_cell = (
@@ -152,13 +171,14 @@ class GraphMosaicIntegration:
 
             # 获取细胞的空间坐标（x, y）
             cell_coords = mdata.obs[["x", "y"]].values  # 获取所有细胞的空间坐标
-            print('--------Spatial information loaded--------')
+            print("--------Spatial information loaded--------")
             # 计算细胞之间的欧几里得距离
             distances = cdist(cell_coords, cell_coords)
 
-
             # 根据距离阈值构建边，只有距离小于阈值的细胞才有边连接
-            adjacency_matrix = distances < cls.distance_threshold  # 阈值设定为 distance_threshold
+            adjacency_matrix = (
+                distances < cls.distance_threshold
+            )  # 阈值设定为 distance_threshold
 
             # 获取满足条件的细胞对（row, col 是索引）
             row, col = np.where(adjacency_matrix)
@@ -168,34 +188,43 @@ class GraphMosaicIntegration:
             row, col = row[valid_edges], col[valid_edges]
 
             # 使用指数衰减函数根据距离计算边的权重
-            if cls.weight_type =='exp':
+            if cls.weight_type == "exp":
                 weights = np.exp(-distances[row, col] / cls.sigma)
 
-            if cls.weight_type == 'attention':
-                cls.attention_layer = AttentionLayer(input_dim=1, output_dim=1)  # 默认创建MLP网络
+            if cls.weight_type == "attention":
+                cls.attention_layer = AttentionLayer(
+                    input_dim=1, output_dim=1
+                )  # 默认创建MLP网络
                 distance_values = distances[row, col].reshape(-1, 1)
 
-                #尝试计算相似性
+                # 尝试计算相似性
                 from sklearn.metrics.pairwise import cosine_similarity
-                expression_matrix = mdata.mod['rna'].X  
+
+                expression_matrix = mdata.mod["rna"].X
                 cosine_sim = cosine_similarity(expression_matrix)
-                expression_similarity_values = (cosine_sim[row, col]+1)/2
+                expression_similarity_values = (cosine_sim[row, col] + 1) / 2
                 similarity_values = expression_similarity_values.reshape(-1, 1)
                 # import ipdb;ipdb.set_trace()
-                distance_values= distance_values*similarity_values
+                distance_values = distance_values * similarity_values
                 print(distance_values)
-                weights = cls.attention_layer(torch.tensor(distance_values, dtype=torch.float32)).squeeze()
-                weights = weights.detach().numpy()*cls.sigma
-                
+                weights = cls.attention_layer(
+                    torch.tensor(distance_values, dtype=torch.float32)
+                ).squeeze()
+                weights = weights.detach().numpy() * cls.sigma
+
             # 将空间驱动的边加入到 main_edges_df 中
             # import ipdb;ipdb.set_trace()
-            spatial_edge_df = pd.DataFrame({
-                "src": row,
-                "dst": col,
-                "weight": weights,  # 可根据需求调整权重
-            })
+            spatial_edge_df = pd.DataFrame(
+                {
+                    "src": row,
+                    "dst": col,
+                    "weight": weights,  # 可根据需求调整权重
+                }
+            )
         else:
-            spatial_edge_df = pd.DataFrame()  # 如果不使用空间信息，创建一个空的 DataFrame
+            spatial_edge_df = (
+                pd.DataFrame()
+            )  # 如果不使用空间信息，创建一个空的 DataFrame
         print(spatial_edge_df)
 
         # get all edges
@@ -242,7 +271,7 @@ class GraphMosaicIntegration:
             main_edges_df.append(edge_df)
 
         if not spatial_edge_df.empty:
-            main_edges_df.append(spatial_edge_df)        # 将空间驱动的边加入到主边列表
+            main_edges_df.append(spatial_edge_df)  # 将空间驱动的边加入到主边列表
 
         main_edges_df = pd.concat(main_edges_df, ignore_index=True)
         main_edges = main_edges_df[["src", "dst"]].values
@@ -299,36 +328,28 @@ class GraphMosaicIntegration:
                 device=self.device,
                 dtype=torch.long,
             ),
-            use_batch_embedding=self.add_batch_embedding,
+            add_batch_embedding=self.add_batch_embedding,
             loss_type=self.loss_type,
         )
 
         # 初始化训练器
-        alpha = np.zeros(self.num_epochs)
-        alpha[self.late_join_alpha :] = self.alpha
-        loss_alpha = np.zeros(self.num_epochs)
-        loss_alpha[self.late_join_loss_alpha :] = self.loss_alpha
-        loss_clu_weight = np.zeros(self.num_epochs)
-        loss_clu_weight[self.late_join_clu_weight :] = self.clu_loss_weight
         self.trainer = Trainer(
             model=self.model,
             device=self.device,
             optimizer=self.optimizer,
             lr=self.learning_rate,
             neg_sample_in_batch=self.neg_sample_in_batch,
-            adversarial_training=self.adversarial_training,
             adversarial_batching_method=self.adversarial_batching_method,
-            adversarial_with_feature_nodes=False,
             batch_size=self.batch_size,
             disc_node_num_per_batch=self.disc_node_num_per_batch,
             neg_sampling_mode=self.neg_sampling_mode,
             loss_type=self.loss_type,
             patience=self.patience,
             random_seed=self.random_seed,
-            label_smoothing=self.label_smoothing,
-            grad_reverse_weight=alpha,
-            cls_loss_weight=loss_alpha,
-            clu_loss_weight=loss_clu_weight,
+            # label_smoothing=self.label_smoothing,
+            # grad_reverse_weight=alpha,
+            # cls_loss_weight=loss_alpha,
+            # clu_loss_weight=loss_clu_weight,
             # clu_loss_temp=loss_clu_temp,
         )
 
@@ -337,45 +358,47 @@ class GraphMosaicIntegration:
             num_neg_per_pos=self.num_neg_per_pos,
             num_epochs=self.num_epochs,
             val_split=self.val_split,
+            disc_with_feature_nodes=False,
+            **self.weights,
         )
 
         if not self.adversartial_balance_weights:
             return
 
-        # 训练 adversarial_training 后，再训练一次，使用平衡的权重
-        print("Estimate balance weights...")
-        balanced_weights = self.trainer.estimate_balance_weights()
-        graph.nodes_adversarial_weights = balanced_weights
-        # 重新构建新的训练流程
-        print("Retrain with balanced weights...")
-        self.trainer_balanced = Trainer(
-            model=self.model,
-            device=self.device,
-            optimizer=self.optimizer,
-            lr=self.learning_rate * 0.1,
-            neg_sample_in_batch=self.neg_sample_in_batch,
-            adversarial_training=self.adversarial_training,
-            adversarial_batching_method=self.adversarial_batching_method,
-            adversarial_with_feature_nodes=False,
-            batch_size=self.batch_size,
-            disc_node_num_per_batch=self.disc_node_num_per_batch,
-            label_smoothing=self.label_smoothing,
-            alpha=self.alpha,
-            loss_alpha=self.loss_alpha,
-            neg_sampling_mode=self.neg_sampling_mode,
-            loss_type=self.loss_type,
-            late_join_alpha=0,
-            late_join_loss_alpha=0,
-            patience=self.patience,
-            random_seed=self.random_seed,
-            std_loss_alpha=self.std_loss_alpha,
-        )
-        self.trainer_balanced.train(
-            graph=graph,
-            num_neg_per_pos=self.num_neg_per_pos,
-            num_epochs=self.num_epochs_with_balanced_weights,
-            val_split=self.val_split,
-        )
+        # # 训练 adversarial_training 后，再训练一次，使用平衡的权重
+        # print("Estimate balance weights...")
+        # balanced_weights = self.trainer.estimate_balance_weights()
+        # graph.nodes_adversarial_weights = balanced_weights
+        # # 重新构建新的训练流程
+        # print("Retrain with balanced weights...")
+        # self.trainer_balanced = Trainer(
+        #     model=self.model,
+        #     device=self.device,
+        #     optimizer=self.optimizer,
+        #     lr=self.learning_rate * 0.1,
+        #     neg_sample_in_batch=self.neg_sample_in_batch,
+        #     adversarial_training=self.adversarial_training,
+        #     adversarial_batching_method=self.adversarial_batching_method,
+        #     adversarial_with_feature_nodes=False,
+        #     batch_size=self.batch_size,
+        #     disc_node_num_per_batch=self.disc_node_num_per_batch,
+        #     label_smoothing=self.label_smoothing,
+        #     alpha=self.w_grad_rev,
+        #     loss_alpha=self.w_loss_cls,
+        #     neg_sampling_mode=self.neg_sampling_mode,
+        #     loss_type=self.loss_type,
+        #     late_join_alpha=0,
+        #     late_join_loss_alpha=0,
+        #     patience=self.patience,
+        #     random_seed=self.random_seed,
+        #     std_loss_alpha=self.std_loss_alpha,
+        # )
+        # self.trainer_balanced.train(
+        #     graph=graph,
+        #     num_neg_per_pos=self.num_neg_per_pos,
+        #     num_epochs=self.num_epochs_with_balanced_weights,
+        #     val_split=self.val_split,
+        # )
 
     def save(self, path: str):
         os.makedirs(path, exist_ok=True)
