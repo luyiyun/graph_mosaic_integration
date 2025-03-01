@@ -18,7 +18,6 @@ for i in [0.04]:
     print(mdata)
     mdata = data_infor_integrate(
         mdata,
-        
         feature_key="batch",
         saved_feature_name="batch",
         target_attr="obs",
@@ -36,21 +35,24 @@ for i in [0.04]:
         target_attr="obsm",
         dim_limit=20,
     )
-    batch_mapping = {category: idx + 1 for idx, category in enumerate(mdata.obs['batch'].cat.categories)}
-    mdata.obs['batch'] = mdata.obs['batch'].map(batch_mapping)
-    #  import ipdb; ipdb.set_trace()
-    num_neg_per_pos=4
-    label_smoothing =0.1
-    alpha=i
-    loss_alpha=0.2
+    batch_mapping = {
+        category: idx + 1
+        for idx, category in enumerate(mdata.obs["batch"].cat.categories)
+    }
+    mdata.obs["batch"] = mdata.obs["batch"].map(batch_mapping)
+    # import ipdb; ipdb.set_trace()
+    num_neg_per_pos = 4
+    label_smoothing = 0.1
+    alpha = i
+    loss_alpha = 0.2
     neg_sampling_mode = "matched"
-    adversartial_balance_weights=True
+    adversartial_balance_weights = True
 
     gmi_model = GraphMosaicIntegration(
         num_neg_per_pos=num_neg_per_pos,
         label_smoothing=label_smoothing,
-        alpha=alpha,
-        loss_alpha=loss_alpha,
+        w_grad_rev=alpha,
+        w_loss_cls=loss_alpha,
         adversarial_training=True,
         adversarial_batching_method="divide",
         val_split=0.1,
@@ -65,9 +67,7 @@ for i in [0.04]:
         add_batch_embedding=True,
         bilinear=False,
     )
-    gmi_model.fit(mdata, batch_key="batch", 
-                  feature_interaction_key="net"
-                  )
+    gmi_model.fit(mdata, batch_key="batch", feature_interaction_key="net")
     gmi_model.save(result_path)
 
     plot_umap(
