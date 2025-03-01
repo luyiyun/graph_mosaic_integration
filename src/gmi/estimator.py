@@ -88,7 +88,8 @@ class GraphMosaicIntegration:
     use_spatial_distance: bool = True  # 添加开关参数
     distance_threshold: float = 50  # 设定一个空间距离阈值
     sigma: float = 0.00007  # 控制距离对边权重的影响
-    weight_type: Literal["exp","attention"] = "attention" 
+    weight_sigma: float=1
+    weight_type: Literal["exp","attention"] = "exp" 
     def fit(
         self,
         mdata: mu.MuData,
@@ -169,23 +170,24 @@ class GraphMosaicIntegration:
 
             # 使用指数衰减函数根据距离计算边的权重
             if cls.weight_type =='exp':
-                weights = np.exp(-distances[row, col] / cls.sigma)
+                weights = np.exp(-distances[row, col] / cls.sigma)*cls.weight_sigma
 
-            if cls.weight_type == 'attention':
-                cls.attention_layer = AttentionLayer(input_dim=1, output_dim=1)  # 默认创建MLP网络
-                distance_values = distances[row, col].reshape(-1, 1)
+            # if cls.weight_type == 'attention':
+            #     cls.attention_layer = AttentionLayer(input_dim=1, output_dim=1)  # 默认创建MLP网络
+            #     distance_values = distances[row, col].reshape(-1, 1)
 
-                #尝试计算相似性
-                from sklearn.metrics.pairwise import cosine_similarity
-                expression_matrix = mdata.mod['rna'].X  
-                cosine_sim = cosine_similarity(expression_matrix)
-                expression_similarity_values = (cosine_sim[row, col]+1)/2
-                similarity_values = expression_similarity_values.reshape(-1, 1)
-                # import ipdb;ipdb.set_trace()
-                distance_values= distance_values*similarity_values
-                print(distance_values)
-                weights = cls.attention_layer(torch.tensor(distance_values, dtype=torch.float32)).squeeze()
-                weights = weights.detach().numpy()*cls.sigma
+            #     #尝试计算相似性
+            #     from sklearn.metrics.pairwise import cosine_similarity
+            #     expression_matrix = mdata.mod['rna'].X  
+            #     cosine_sim = cosine_similarity(expression_matrix)
+            #     expression_similarity_values = (cosine_sim[row, col]+1)/2
+            #     similarity_values = expression_similarity_values.reshape(-1, 1)
+            #     # import ipdb;ipdb.set_trace()
+            #     distance_values= distance_values*similarity_values
+            #     print(distance_values)
+            #     # weights=distance_values*cls.sigma
+            #     weights = cls.attention_layer(torch.tensor(distance_values, dtype=torch.float32)).squeeze()
+            #     weights = weights.detach().numpy()*cls.sigma
                 
             # 将空间驱动的边加入到 main_edges_df 中
             # import ipdb;ipdb.set_trace()

@@ -191,7 +191,7 @@ if __name__ == "__main__":
         adata = mdata.mod['rna'].copy()
         adata2 = sc.read_h5ad("/root/autodl-tmp/adata_all_human_lymph_node_A1.h5ad")
         index_match = adata.obs.index.equals(adata2.obs.index)
-
+        import ipdb;ipdb.set_trace()
         if index_match:
             print("adata 和 adata2 的 obs 索引完全一致。")
         else:
