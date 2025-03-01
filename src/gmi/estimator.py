@@ -40,16 +40,15 @@ class GraphMosaicIntegration:
     learning_rate: float = 0.01
     num_neg_per_pos: int = 4
     num_epochs: int = 100
+    num_epochs_with_balanced_weights: int = 0
     batch_size: int = 131072
     val_split: float = 0.2  # 验证集比例
     # add_feature_net: bool = True
     neg_sample_in_batch: bool = False
     device: str = "cuda"
     optimizer: Literal["adam", "rmsprop"] = "adam"
-    adversarial_training: bool = True
     adversarial_batching_method: Literal["unique", "divide", "random"] = "divide"
     adversartial_balance_weights: bool = False
-    num_epochs_with_balanced_weights: int = 50
     disc_node_num_per_batch: int = 200
     neg_sampling_mode: Literal["full", "matched", "bipartitle"] = "matched"
     loss_type: Literal["margin_ranking", "weighted_softmax"] = "weighted_softmax"
@@ -64,13 +63,10 @@ class GraphMosaicIntegration:
     w_infonce_temp: float = 1.0
     w_clu_temp: float = 1.0
     w_cov: float = 0.0
+    w_dist: float = 0.0
     late_join_weights: dict[str, int] | None = None
 
     def __post_init__(self):
-        assert (
-            not self.adversartial_balance_weights
-        ), "adversartial_balance_weights is not supported yet!"
-
         self.late_join_weights = self.late_join_weights or {}
 
         weight_names = [
@@ -81,6 +77,7 @@ class GraphMosaicIntegration:
             "w_infonce_temp",
             "w_clu_temp",
             "w_cov",
+            "w_dist",
         ]
         assert all(k in weight_names for k in self.late_join_weights)
         self.weights = {}
@@ -247,26 +244,18 @@ class GraphMosaicIntegration:
                 device=self.device,
                 dtype=torch.long,
             ),
-            use_batch_embedding=self.add_batch_embedding,
+            add_batch_embedding=self.add_batch_embedding,
             loss_type=self.loss_type,
         )
 
         # 初始化训练器
-        # alpha = np.zeros(self.num_epochs)
-        # alpha[self.late_join_alpha :] = self.w_grad_rev
-        # loss_alpha = np.zeros(self.num_epochs)
-        # loss_alpha[self.late_join_loss_alpha :] = self.w_loss_cls
-        # loss_clu_weight = np.zeros(self.num_epochs)
-        # loss_clu_weight[self.late_join_clu_weight :] = self.w_loss_clu
         self.trainer = Trainer(
             model=self.model,
             device=self.device,
             optimizer=self.optimizer,
             lr=self.learning_rate,
             neg_sample_in_batch=self.neg_sample_in_batch,
-            adversarial_training=self.adversarial_training,
             adversarial_batching_method=self.adversarial_batching_method,
-            adversarial_with_feature_nodes=False,
             batch_size=self.batch_size,
             disc_node_num_per_batch=self.disc_node_num_per_batch,
             neg_sampling_mode=self.neg_sampling_mode,
@@ -285,6 +274,7 @@ class GraphMosaicIntegration:
             num_neg_per_pos=self.num_neg_per_pos,
             num_epochs=self.num_epochs,
             val_split=self.val_split,
+            disc_with_feature_nodes=False,
             **self.weights,
         )
 

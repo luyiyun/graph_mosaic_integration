@@ -15,6 +15,7 @@ class WEIGHT(TypedDict, total=False):
     w_infonce_temp: float
     w_clu_temp: float
     w_cov: float
+    w_dist: float
 
 
 class WEIGHTS(TypedDict, total=False):
@@ -25,6 +26,7 @@ class WEIGHTS(TypedDict, total=False):
     w_infonce_temp: Sequence[float] | float
     w_clu_temp: Sequence[float] | float
     w_cov: Sequence[float] | float
+    w_dist: Sequence[float] | float
 
 
 def save_embeddings(node_embedding, embedding_path="final_embeddings.csv"):
@@ -117,10 +119,10 @@ class GMIModel(nn.Module):
         num_cells: int | None = None,
         num_cluster: int | None = None,
         cell_batch_ids: torch.Tensor | None = None,
-        use_batch_embedding: bool = False,
+        add_batch_embedding: bool = False,
         loss_type: Literal["weighted_softmax", "margin_ranking"] = "weighted_softmax",
     ):
-        if use_batch_embedding:
+        if add_batch_embedding:
             assert (
                 cell_batch_ids is not None
             ), "cell_batch_ids must be provided when use_batch_embedding is True"
@@ -134,7 +136,7 @@ class GMIModel(nn.Module):
         self.bilinear = bilinear
         self.n_cluster = num_cluster
         self.loss_type = loss_type
-        self.use_batch_embedding = use_batch_embedding
+        self.use_batch_embedding = add_batch_embedding
 
         self.register_buffer("cell_batch_ids", cell_batch_ids)
         self.n_batches = (
@@ -149,7 +151,7 @@ class GMIModel(nn.Module):
             self.domain_classifier = DomainClassifier(
                 embedding_dim, self.n_batches, hiddens=disc_hidden_dims, bn=bn
             )
-        if use_batch_embedding:
+        if add_batch_embedding:
             self.batch_embedding = nn.Embedding(self.n_batches, embedding_dim)
         if bilinear:
             self.relation_matrix = nn.Parameter(
@@ -175,6 +177,7 @@ class GMIModel(nn.Module):
         w_infonce_temp: float = 1.0,
         w_clu_temp: float = 1.0,
         w_cov: float = 1.0,
+        w_dist: float = 0.0,
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor], dict[str, torch.Tensor]]:
         flag_calc_cls_loss = self.n_batches > 1 and w_loss_cls > 0.0
         flag_calc_clu_loss = self.n_cluster is not None and w_loss_clu > 0.0
@@ -247,7 +250,7 @@ class GMIModel(nn.Module):
         loss += loss_edge
         loss_dict["edge"] = loss_edge
 
-        if flag_calc_cls_loss or flag_calc_clu_loss:
+        if flag_calc_cls_loss or flag_calc_clu_loss or w_dist > 0.0:
             domain_embed_ori = self.node_embedding(domain_input)
 
         # 领域分类损失函数
@@ -294,5 +297,17 @@ class GMIModel(nn.Module):
             loss_cov = cell_nodes_emb.var(dim=0).log().mean()
             loss += loss_cov * w_cov
             loss_dict["cov"] = loss_cov
+
+        if w_dist > 0.0:
+            dist = (domain_embed_ori - domain_embed_ori[:, None, :]).pow(2).sum(dim=-1)
+            row, col = torch.tril_indices(
+                dist.shape[0], dist.shape[1], offset=-1, device=dist.device
+            ).unbind()
+            dist = dist[row, col]
+            # TODO: weight是否可以不计入计算图
+            weight = torch.softmax(-dist, dim=0)
+            loss_dist = torch.sum(dist * weight)
+            loss += loss_dist * w_dist
+            loss_dict["dist"] = loss_dist
 
         return loss, loss_dict, others
