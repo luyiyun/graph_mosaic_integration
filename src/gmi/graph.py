@@ -19,6 +19,7 @@ class MosaicDataGraph:
     feat_edges_df: pd.DataFrame | None = None
     feat_edge_groups: np.ndarray | None = None
     nodes_adversarial_weights: np.ndarray | None = None
+    
 
     def __post_init__(self):
         self.edges_df = (

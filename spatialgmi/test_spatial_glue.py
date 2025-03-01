@@ -125,7 +125,9 @@ print(adata.obsm.keys())
 # 8. 聚类分析
 ########################################
 print("\n=== Step 8: 聚类 ===")
-clustering(adata, key='SpatialGlue', add_key='SpatialGlue', n_clusters=6, method='leiden')
+# 使用Leiden算法并调整分辨率参数
+sc.pp.neighbors(adata, use_rep='SpatialGlue')
+sc.tl.leiden(adata, resolution=0.8, key_added='SpatialGlue')
 
 print("\n聚类结果分布:")
 print(adata.obs['SpatialGlue'].value_counts())
@@ -138,7 +140,7 @@ sc.pp.neighbors(adata, use_rep='SpatialGlue', n_neighbors=10)
 sc.tl.umap(adata)
 
 # 创建可视化面板
-fig, axs = plt.subplots(1, 3, figsize=(15, 4))
+fig, axs = plt.subplots(1, 2, figsize=(10, 4))
 
 # UMAP可视化
 sc.pl.umap(adata, color='SpatialGlue', ax=axs[0], title='UMAP Clustering', show=False)
@@ -147,9 +149,9 @@ sc.pl.umap(adata, color='SpatialGlue', ax=axs[0], title='UMAP Clustering', show=
 sc.pl.embedding(adata, basis='spatial', color='SpatialGlue', ax=axs[1], 
                 title='Spatial Distribution', s=50, show=False)
 
-# 显示alpha权重分布
-axs[2].hist(adata.obsm['alpha'], bins=30, color='skyblue')
-axs[2].set_title('Alpha Weight Distribution')
+# # 显示alpha权重分布
+# axs[2].hist(adata.obsm['alpha'], bins=30, color=['skyblue', 'orange'])
+# axs[2].set_title('Alpha Weight Distribution')
 
 plt.tight_layout()
 plt.savefig("SpatialGlue_Full_Results.png")

@@ -9,7 +9,7 @@ from sklearn.decomposition import PCA
 from mudata import MuData
 
 import typehint as typ
-from utils import merge_multi_obs_cols
+from .utils import merge_multi_obs_cols
 
 
 def log1p_norm(dat: Tuple[np.ndarray, sp.csr_matrix]) -> np.ndarray:

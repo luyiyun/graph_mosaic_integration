@@ -5,11 +5,12 @@ import os.path as osp
 import json
 
 import torch
+import torch.nn as nn
 import mudata as mu
 import pandas as pd
 import numpy as np
 from scipy.sparse import csr_matrix, coo_matrix
-
+from scipy.spatial.distance import cdist
 from .graph import MosaicDataGraph
 from .model import GMIModel
 from .trainer import Trainer
@@ -31,6 +32,25 @@ def log_transform_and_normalize(matrix: csr_matrix | np.ndarray) -> csr_matrix:
     return csr_matrix(matrix)
 
 
+class AttentionLayer(nn.Module):
+    def __init__(self, input_dim=1, output_dim=1):
+        super(AttentionLayer, self).__init__()
+        self.fc1 = nn.Linear(input_dim, 64)  # 第一层线性变换
+        self.fc2 = nn.Linear(64, 32)         # 第二层线性变换
+        self.fc3 = nn.Linear(32, output_dim)  # 输出层
+        self.relu = nn.ReLU()  # 激活函数
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.relu(x)
+        x = self.fc2(x)
+        x = self.relu(x)
+        x = self.fc3(x)
+        x = torch.sigmoid(x)  # 使用 Sigmoid 激活函数，输出概率
+        return x
+
+
+    
 @dataclass
 class GraphMosaicIntegration:
     embedding_dim: int = 50
@@ -65,7 +85,10 @@ class GraphMosaicIntegration:
     num_cluster: int | None = None
     clu_loss_weight: float = 0.1
     late_join_clu_weight: int = 100
-
+    use_spatial_distance: bool = True  # 添加开关参数
+    distance_threshold: float = 50  # 设定一个空间距离阈值
+    sigma: float = 0.00007  # 控制距离对边权重的影响
+    weight_type: Literal["exp","attention"] = "attention" 
     def fit(
         self,
         mdata: mu.MuData,
@@ -92,9 +115,10 @@ class GraphMosaicIntegration:
         batch_key: str | None,
         log_norm: bool = True,
         feature_interaction_key: str | None = None,
+
     ) -> MosaicDataGraph:
         # mdata -> graph
-
+        
         # get all nodes
         indice = mdata.obs.index.tolist() + mdata.var.index.tolist()
         group_cell = (
@@ -120,6 +144,59 @@ class GraphMosaicIntegration:
             },
             index=indice,
         )
+        # --- 如果启用空间信息 --- #
+        if cls.use_spatial_distance:
+            # 确保每个细胞的空间坐标（x, y）已包含在 mdata.obs 中
+            if "x" not in mdata.obs or "y" not in mdata.obs:
+                raise ValueError("空间坐标 x 和 y 不存在于 mdata.obs 中")
+
+            # 获取细胞的空间坐标（x, y）
+            cell_coords = mdata.obs[["x", "y"]].values  # 获取所有细胞的空间坐标
+            print('--------Spatial information loaded--------')
+            # 计算细胞之间的欧几里得距离
+            distances = cdist(cell_coords, cell_coords)
+
+
+            # 根据距离阈值构建边，只有距离小于阈值的细胞才有边连接
+            adjacency_matrix = distances < cls.distance_threshold  # 阈值设定为 distance_threshold
+
+            # 获取满足条件的细胞对（row, col 是索引）
+            row, col = np.where(adjacency_matrix)
+
+            # 过滤掉对角线上的边（即一个细胞和它自己之间的边）
+            valid_edges = row != col
+            row, col = row[valid_edges], col[valid_edges]
+
+            # 使用指数衰减函数根据距离计算边的权重
+            if cls.weight_type =='exp':
+                weights = np.exp(-distances[row, col] / cls.sigma)
+
+            if cls.weight_type == 'attention':
+                cls.attention_layer = AttentionLayer(input_dim=1, output_dim=1)  # 默认创建MLP网络
+                distance_values = distances[row, col].reshape(-1, 1)
+
+                #尝试计算相似性
+                from sklearn.metrics.pairwise import cosine_similarity
+                expression_matrix = mdata.mod['rna'].X  
+                cosine_sim = cosine_similarity(expression_matrix)
+                expression_similarity_values = (cosine_sim[row, col]+1)/2
+                similarity_values = expression_similarity_values.reshape(-1, 1)
+                # import ipdb;ipdb.set_trace()
+                distance_values= distance_values*similarity_values
+                print(distance_values)
+                weights = cls.attention_layer(torch.tensor(distance_values, dtype=torch.float32)).squeeze()
+                weights = weights.detach().numpy()*cls.sigma
+                
+            # 将空间驱动的边加入到 main_edges_df 中
+            # import ipdb;ipdb.set_trace()
+            spatial_edge_df = pd.DataFrame({
+                "src": row,
+                "dst": col,
+                "weight": weights,  # 可根据需求调整权重
+            })
+        else:
+            spatial_edge_df = pd.DataFrame()  # 如果不使用空间信息，创建一个空的 DataFrame
+        print(spatial_edge_df)
 
         # get all edges
         main_edges_df = []
@@ -163,6 +240,9 @@ class GraphMosaicIntegration:
                 }
             )
             main_edges_df.append(edge_df)
+
+        if not spatial_edge_df.empty:
+            main_edges_df.append(spatial_edge_df)        # 将空间驱动的边加入到主边列表
 
         main_edges_df = pd.concat(main_edges_df, ignore_index=True)
         main_edges = main_edges_df[["src", "dst"]].values
