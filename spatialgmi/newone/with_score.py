@@ -81,8 +81,11 @@ def run_gmi_pipeline(timestamp):
             saved_feature_name="batch",
             target_attr="obs",
         )
-        mdata.obs['x'] = mdata['rna'].obsm['spatial'][:, 0]
-        mdata.obs['y'] = mdata['rna'].obsm['spatial'][:, 1]
+
+        mdata['rna'].obs['x'] = mdata['rna'].obsm['spatial'][:, 0]
+        mdata['rna'].obs['y'] = mdata['rna'].obsm['spatial'][:, 1]
+        mdata['adt'].obs['x'] = mdata['adt'].obsm['spatial'][:, 0]
+        mdata['adt'].obs['y'] = mdata['adt'].obsm['spatial'][:, 1]
 
         # Batch编码映射
         batch_mapping = {cat: idx + 1 for idx, cat in enumerate(mdata.obs['batch'].cat.categories)}
@@ -91,6 +94,7 @@ def run_gmi_pipeline(timestamp):
         print(f"× 元数据字段缺失: {str(e)}")
         return
     print(mdata)
+
     # 3. 模型训练
     # 创建结果目录
     timestamp = timestamp
@@ -106,9 +110,9 @@ def run_gmi_pipeline(timestamp):
     gmi_model = GraphMosaicIntegration(
         num_neg_per_pos=CONFIG['model_params']['num_neg_per_pos'],
         label_smoothing=CONFIG['model_params']['label_smoothing'],
-        alpha=alpha,
-        loss_alpha=CONFIG['model_params']['loss_alpha'],
-        adversarial_training=True,
+        w_grad_rev=CONFIG['model_params']['alpha'],
+        w_loss_cls=CONFIG['model_params']['loss_alpha'],
+        #adversarial_training=True,
         adversarial_batching_method="divide",
         val_split=0.1,
         patience=5,
@@ -119,7 +123,6 @@ def run_gmi_pipeline(timestamp):
         learning_rate=CONFIG['model_params']['learning_rate'],
         add_batch_embedding=True,
         bilinear=False,
-        sigma=CONFIG['model_params']['sigma'],
         use_spatial_distance= True,
         distance_threshold= CONFIG['model_params']["distance_threshold"],
     )
@@ -129,6 +132,10 @@ def run_gmi_pipeline(timestamp):
     gmi_model.fit(
         mdata, 
         batch_key="batch",
+        spatial_keys=["x", "y"],
+        spatial_threshold=40,
+        spatial_sigma=CONFIG['model_params']['sigma'],
+        spatial_alpha=CONFIG['model_params']['w_sigma'],
         feature_interaction_key="net"  # 确保已构建varp['net']
     )
     
@@ -146,21 +153,22 @@ if __name__ == "__main__":
     # 检查GPU可用性
     timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M')
     print(f"可用设备: {'GPU' if torch.cuda.is_available() else 'CPU'}")
-    for alpha in [0.1]:
+    for alpha in [0.5,0.6,0.65,0.7,0.8]:
         CONFIG = {
             "data_path": "/root/autodl-tmp/Human_Lymph_Node/processed/rna_adt.h5mu",
             "result_root": "./results",
             "model_params": {
                 "num_neg_per_pos": 4,
                 "label_smoothing": 0.1,
-                "loss_alpha": 0.2,
+                "loss_alpha": 0.1,
                 "alpha":0.1,
                 "neg_sampling_mode": "matched",
                 "adversarial_balance_weights": False,
                 "num_epochs": 100,
-                "learning_rate": alpha,
-                "distance_threshold": 20,
-                "sigma": 1,
+                "learning_rate": 0.05,
+                "distance_threshold": 5,
+                "sigma": alpha,
+                "w_sigma":1,
                 "use_spatial_distance": True
             }
         }
@@ -176,6 +184,56 @@ if __name__ == "__main__":
         annotation_path="/root/autodl-tmp/annotation.csv"
         annotation=pd.read_csv(annotation_path, index_col=0)
         mdata.obsm["X_gmi"] = embeddings.loc[mdata.obs.index].to_numpy()
+        # adata = mdata.mod['rna'].copy()
+        # adata.obsm['X_gmi']=mdata.obsm['X_gmi']
+        # celltype_to_structure = {
+        #     'CD34+ SC': 'capsule',          # CD34+ 基质细胞 -> 被膜
+        #     'Ccl19lo TRC': 'cortex',        # Ccl19lo TRC -> 皮质
+        #     'Cxcl9+ TRC': 'cortex',         # Cxcl9+ TRC -> 皮质
+        #     'FDC': 'follicle',              # 滤泡树突状细胞 -> 滤泡
+        #     'Inmt+ SC': 'medulla cords',    # Inmt+ SC -> 髓索
+        #     'MRC': 'medulla cords',         # 髓质网状细胞 -> 髓索
+        #     'Nr4a1+ SC': 'cortex',          # Nr4a1+ SC -> 皮质
+        #     'PvC': 'medulla vessels',       # 血管周细胞 -> 髓质血管
+        #     'TRC': 'cortex',                # TRC -> 皮质
+        # }
+        # cc_label_after = adata.obs['CC label'][3484:]
+        # cc_label_after_mapped = cc_label_after.map(celltype_to_structure)
+        # adata.obs['cell_type'] = np.nan
+        # adata.obs.iloc[:3484, adata.obs.columns.get_loc('cell_type')] = annotation.values[:,0]
+        # adata.obs.iloc[3484:, adata.obs.columns.get_loc('cell_type')] = cc_label_after_mapped.values
+        # print(adata.obs['cell_type'].value_counts())
+        #     # 创建左右两个子图
+        # fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
+
+        # # 左侧：按 batch 着色
+        # sc.pl.embedding(
+        #     adata,
+        #     basis="gmi",  
+        #     color="batch",
+        #     title="GMI by Batch",
+        #     legend_loc="on data",  
+        #     frameon=False,
+        #     ax=ax1,
+        #     show=False  
+        # )
+
+        # # 右侧：按 cell_type 着色
+        # sc.pl.embedding(
+        #     adata,
+        #     basis="gmi", 
+        #     color="cell_type",
+        #     title="GMI by Cell Type",
+        #     legend_loc="right margin", 
+        #     frameon=False,
+        #     ax=ax2,
+        #     show=False
+        # )
+        # plt.savefig("/root/graph_mosaic_integration/spatialgmi/newone/umap/batch/umap_batch_vs_cell_type.png", dpi=300, bbox_inches="tight")
+        # print('batch and cell type ploted')
+
+
+
         mdata = mdata[:3484]
 
         print(mdata)
@@ -191,7 +249,7 @@ if __name__ == "__main__":
         adata = mdata.mod['rna'].copy()
         adata2 = sc.read_h5ad("/root/autodl-tmp/adata_all_human_lymph_node_A1.h5ad")
         index_match = adata.obs.index.equals(adata2.obs.index)
-        import ipdb;ipdb.set_trace()
+
         if index_match:
             print("adata 和 adata2 的 obs 索引完全一致。")
         else:
@@ -212,7 +270,7 @@ if __name__ == "__main__":
         fig, axs = plt.subplots(2, 4, figsize=(22, 10))
         axs = axs.flatten()
         # UMAP可视化
-        sc.pl.umap(adata, color='gmi_clusters', ax=axs[0], title='GMI Clustering (UMAP)', palette='tab20', show=False)
+        sc.pl.umap(adata, color='ground_truth', ax=axs[0], title='GMI Clustering (UMAP)', palette='tab20', show=False)
 
         # 空间分布可视化
         sc.pl.embedding(adata, basis='spatial', color='gmi_clusters', ax=axs[1], title='Spatial Distribution', s=50, palette='tab20', show=False)
@@ -223,10 +281,10 @@ if __name__ == "__main__":
         sc.pl.embedding(adata2, basis='spatial', color='StabMap', ax=axs[6], title='StabMap', s=50, palette='tab20', show=False)
         sc.pl.embedding(adata2, basis='spatial', color='MultiVI', ax=axs[7], title='MultiVI', s=50, palette='tab20', show=False)
         plt.tight_layout()
-        umap_dir = "/root/graph_mosaic_integration/spatialgmi/newone/umap"
+        umap_dir = f"/root/graph_mosaic_integration/spatialgmi/newone/umap/{alpha}"
         os.makedirs(umap_dir, exist_ok=True)
         plt.savefig(os.path.join(umap_dir, f"umap_result_{alpha}.png"), dpi=300)
-        print(f"\n可视化结果已保存为: {os.path.join(umap_dir, f'umap_result_{alpha}.png')}")
+        print(f"\n可视化结果已保存为: {os.path.join(umap_dir, f'umap_result.png')}")
         # 获取空间坐标（
         spatial_coords = adata2.obsm['spatial']  # 空间坐标
 
@@ -268,7 +326,6 @@ if __name__ == "__main__":
         plt.ylabel('Moran\'s I Score')
         plt.xticks(rotation=45)
         plt.tight_layout()
-        umap_dir = "/root/graph_mosaic_integration/spatialgmi/newone/umap"
         plt.savefig(os.path.join(umap_dir, f"umap_result_Moran.png"), dpi=300)
         print(f"\n可视化结果已保存为: {os.path.join(umap_dir, f'umap_result_{alpha}.png')}")
         plt.show()

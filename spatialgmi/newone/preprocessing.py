@@ -31,7 +31,7 @@ def create_mosaic_dataset(rna_path: str, adt_path: str) -> MuData:
 
     # 2. 添加batch信息
     print("→ 添加batch信息...")
-    for adata in [adata_rna, adata_adt]:
+    for adata in [adata_adt]:
         adata.obs['batch'] = 1
         adata.obs['batch'] = adata.obs['batch'].astype('category')
 
@@ -132,7 +132,7 @@ def preprocess_mudata(mdata: MuData) -> MuData:
         window_size=0,
         use_chrom=[str(i) for i in range(1, 23)] + ["X", "Y"]
     )
-    import ipdb;ipdb.set_trace()
+
     # 转换为连接矩阵
     rna_adt = overlaps.tocsr()    
     # rna_symbols = var_rna.index.str.upper()  # 假设 RNA 基因名需要大写匹配
@@ -197,8 +197,8 @@ def preprocess_mudata(mdata: MuData) -> MuData:
 
 def main():
     parser = ArgumentParser()
-    RNA_PATH = "/root/autodl-tmp/Human_Lymph_Node/adata_RNA_combined.h5ad"
-    ADT_PATH = "/root/autodl-tmp/Human_Lymph_Node/adata_ADT_combined.h5ad"
+    RNA_PATH = "/root/autodl-tmp/Human_Lymph_Node/adata_RNA.h5ad"  #"/root/autodl-tmp/combined_rna_stroma.h5ad"
+    ADT_PATH = "/root/autodl-tmp/Human_Lymph_Node/adata_ADT.h5ad"
     OUTPUT_PATH = "/root/autodl-tmp/Human_Lymph_Node/processed"
     parser.add_argument("--RNA_PATH", default=RNA_PATH)
     parser.add_argument("--ADT_PATH", default=ADT_PATH)

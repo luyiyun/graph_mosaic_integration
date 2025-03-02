@@ -273,6 +273,7 @@ class GMIModel(nn.Module):
                     domain_pred, domain_label, label_smoothing=label_smoothing
                 )
             loss += loss_domain * w_loss_cls
+
             loss_dict["domain"] = loss_domain
 
         # 聚类损失函数
