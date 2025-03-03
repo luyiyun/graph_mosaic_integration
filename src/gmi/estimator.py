@@ -109,14 +109,6 @@ class GraphMosaicIntegration:
             else:
                 self.weights[k] = getattr(self, k)
 
-    clu_loss_weight: float = 0.1
-    late_join_clu_weight: int = 100
-    use_spatial_distance: bool = True  # 添加开关参数
-    distance_threshold: float = 10  # 设定一个空间距离阈值
-    sigma: float = 0.0001  # 控制距离对边权重的影响
-    weight_sigma: float=1
-    weight_type: Literal["exp","attention"] = "exp" 
-    
     def fit(
         self,
         mdata: mu.MuData,
@@ -140,7 +132,7 @@ class GraphMosaicIntegration:
             feature_interaction_key=feature_interaction_key,
             spatial_threshold=spatial_threshold,
             spatial_sigma=spatial_sigma,
-            spatial_alpha=spatial_alpha
+            spatial_alpha=spatial_alpha,
         )
         self.fit_graph(self.graph)
 
@@ -195,7 +187,6 @@ class GraphMosaicIntegration:
         #     # 计算细胞之间的欧几里得距离
         #     distances = cdist(cell_coords, cell_coords)
 
-
         #     # 根据距离阈值构建边，只有距离小于阈值的细胞才有边连接
         #     adjacency_matrix = distances < cls.distance_threshold  # 阈值设定为 distance_threshold
 
@@ -216,7 +207,7 @@ class GraphMosaicIntegration:
 
         #     #     #尝试计算相似性
         #     #     from sklearn.metrics.pairwise import cosine_similarity
-        #     #     expression_matrix = mdata.mod['rna'].X  
+        #     #     expression_matrix = mdata.mod['rna'].X
         #     #     cosine_sim = cosine_similarity(expression_matrix)
         #     #     expression_similarity_values = (cosine_sim[row, col]+1)/2
         #     #     similarity_values = expression_similarity_values.reshape(-1, 1)
@@ -226,7 +217,7 @@ class GraphMosaicIntegration:
         #     #     # weights=distance_values*cls.sigma
         #     #     weights = cls.attention_layer(torch.tensor(distance_values, dtype=torch.float32)).squeeze()
         #     #     weights = weights.detach().numpy()*cls.sigma
-                
+
         #     # 将空间驱动的边加入到 main_edges_df 中
         #     # import ipdb;ipdb.set_trace()
         #     spatial_edge_df = pd.DataFrame({
@@ -321,7 +312,7 @@ class GraphMosaicIntegration:
 
                 # 使用指数衰减函数根据距离计算边的权重
                 # if cls.weight_type == "exp":
-                print(spatial_sigma,spatial_alpha)
+                print(spatial_sigma, spatial_alpha)
                 weights = spatial_alpha * np.exp(-distances[row, col] / spatial_sigma)
                 print(weights)
                 # 将细胞和特征映射到全局索引表中的序列号

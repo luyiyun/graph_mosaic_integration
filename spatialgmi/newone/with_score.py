@@ -123,8 +123,8 @@ def run_gmi_pipeline(timestamp):
         learning_rate=CONFIG['model_params']['learning_rate'],
         add_batch_embedding=True,
         bilinear=False,
-        use_spatial_distance= True,
-        distance_threshold= CONFIG['model_params']["distance_threshold"],
+        # use_spatial_distance= True,
+        # distance_threshold= CONFIG['model_params']["distance_threshold"],
     )
     
     # 模型训练
