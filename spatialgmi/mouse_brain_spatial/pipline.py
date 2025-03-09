@@ -14,9 +14,29 @@ from gmi import (
     plot_umap,
 )
 import squidpy as sq
-from sklearn.metrics import adjusted_rand_score
+
+from sklearn.metrics import homogeneity_score, mutual_info_score, v_measure_score
+from sklearn.metrics import adjusted_mutual_info_score, normalized_mutual_info_score, adjusted_rand_score
 # 配置参数
 
+
+umap_dir = f"/root/graph_mosaic_integration/spatialgmi/mouse_brain_spatial/result/umap/0.7"
+os.makedirs(umap_dir, exist_ok=True)
+# 定义函数：绘制空间分布图
+def plot_spatial(adata,basis, color, title, save_path=None):
+    """绘制空间分布图"""
+    fig, ax = plt.subplots(figsize=(6, 6))
+    sc.pl.embedding(
+        adata,
+        basis=basis,
+        color=color,
+        title=title,
+        ax=ax,
+        show=False,
+    )
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.show()
 
 def run_gmi_pipeline(timestamp):
     """GMI整合分析主流程"""
@@ -66,6 +86,8 @@ def run_gmi_pipeline(timestamp):
     print(f"net的维度: {mdata.varp['net'].shape}")
     print(f"Batch信息: {mdata.obs['batch'].value_counts()}")
 
+    plot_spatial(mdata.mod['rna'][mdata.mod['rna'].obs['batch'] == '1'],basis='spatial', color='cell_type', title='Batch 1: Cell Type', save_path=os.path.join(umap_dir, 'batch1_cell_type_initial.png'))
+    plot_spatial(mdata.mod['rna'][mdata.mod['rna'].obs['batch'] == '2'],basis='spatial', color='cell_type', title='Batch 2: Cell Type', save_path=os.path.join(umap_dir, 'batch2_cell_type_initial.png'))
     # 初始化模型
     gmi_model = GraphMosaicIntegration(
         num_neg_per_pos=CONFIG['model_params']['num_neg_per_pos'],
@@ -193,8 +215,7 @@ if __name__ == "__main__":
         )
         # 调整布局并显示
         plt.tight_layout()
-        umap_dir = f"/root/graph_mosaic_integration/spatialgmi/mouse_brain_spatial/result/umap/{alpha}"
-        os.makedirs(umap_dir, exist_ok=True)
+
         plt.savefig(os.path.join(umap_dir, f"umap_result_{alpha}.png"), dpi=300)
         plt.show()
 
@@ -209,42 +230,94 @@ if __name__ == "__main__":
         rna.obsm['X_gmi'] = rna_x_gmi  
         # 提取 batch=2 和 batch=3 的数据
         batch2_data = rna[rna.obs['batch'] == '2'].copy()
-        batch3_data = rna[rna.obs['batch'] == '3'].copy()
+        batch1_data = rna[rna.obs['batch'] == '1'].copy()
 
         # 定义函数：基于 X_gmi 进行聚类
-        def cluster_with_xgmi(adata, n_clusters=5):
+        def cluster_with_xgmi(adata, n_clusters=3):
             """使用 X_gmi 进行 KMeans 聚类"""
             kmeans = KMeans(n_clusters=n_clusters, random_state=42)
             adata.obs['xgmi_cluster'] = kmeans.fit_predict(adata.obsm['X_gmi'])
             adata.obs['xgmi_cluster'] = adata.obs['xgmi_cluster'].astype('category')
             return adata
         # 对 batch=2 和 batch=3 进行聚类
-        batch2_data = cluster_with_xgmi(batch2_data, n_clusters=5)
-        batch3_data = cluster_with_xgmi(batch3_data, n_clusters=5)
+        batch2_data = cluster_with_xgmi(batch2_data, n_clusters=3)
+        batch1_data = cluster_with_xgmi(batch1_data, n_clusters=3)
 
-        # 定义函数：绘制空间分布图
-        def plot_spatial(adata, color, title, save_path=None):
-            """绘制空间分布图"""
-            fig, ax = plt.subplots(figsize=(6, 6))
-            sc.pl.spatial(
-                adata,
-                color=color,
-                title=title,
-                ax=ax,
-                show=False,
-                spot_size=50  # 根据需要调整点的大小
-            )
-            if save_path:
-                plt.savefig(save_path, dpi=300, bbox_inches='tight')
-            plt.show()
+
 
         # 为 batch=2 绘制空间分布图
         print("Batch 2 的空间分布图")
-        plot_spatial(batch2_data, color='cell_type', title='Batch 2: Cell Type', save_path=os.path.join(umap_dir, 'batch2_cell_type.png'))
-        plot_spatial(batch2_data, color='xgmi_cluster', title='Batch 2: X_gmi Clusters', save_path=os.path.join(umap_dir, 'batch2_xgmi_cluster.png'))
+        plot_spatial(batch2_data,basis='spatial', color='cell_type', title='Batch 2: Cell Type', save_path=os.path.join(umap_dir, 'batch2_cell_type.png'))
+        plot_spatial(batch2_data,basis='spatial', color='xgmi_cluster', title='Batch 2: X_gmi Clusters', save_path=os.path.join(umap_dir, 'batch2_xgmi_cluster.png'))
 
         # 为 batch=3 绘制空间分布图
         print("Batch 3 的空间分布图")
-        plot_spatial(batch3_data, color='cell_type', title='Batch 3: Cell Type', save_path=os.path.join(umap_dir, 'batch3_cell_type.png'))
-        plot_spatial(batch3_data, color='xgmi_cluster', title='Batch 3: X_gmi Clusters', save_path=os.path.join(umap_dir, 'batch3_xgmi_cluster.png'))
- 
+        plot_spatial(batch1_data,basis='spatial', color='cell_type', title='Batch 3: Cell Type', save_path=os.path.join(umap_dir, 'batch1_cell_type.png'))
+        plot_spatial(batch1_data,basis='spatial', color='xgmi_cluster', title='Batch 3: X_gmi Clusters', save_path=os.path.join(umap_dir, 'batch1_xgmi_cluster.png'))
+
+
+        def cal_metric(adata):
+            true_labels = adata.obs['cell_type'].values
+            predicted_labels = adata.obs['xgmi_cluster'].values    
+            
+            # 计算每个指标
+            homogeneity = homogeneity_score(true_labels, predicted_labels)
+            mutual_info = mutual_info_score(true_labels, predicted_labels)
+            v_measure = v_measure_score(true_labels, predicted_labels)
+            ami = adjusted_mutual_info_score(true_labels, predicted_labels)
+            nmi = normalized_mutual_info_score(true_labels, predicted_labels)
+            ari = adjusted_rand_score(true_labels, predicted_labels)
+            return homogeneity,mutual_info,v_measure,ami,nmi,ari
+        
+        homogeneity1,mutual_info1,v_measure1,ami1,nmi1,ari1 = cal_metric(batch1_data)
+        homogeneity2,mutual_info2,v_measure2,ami2,nmi2,ari2 = cal_metric(batch2_data)
+
+
+        print(f"Batch1_Homogeneity: {homogeneity1}")
+        print(f"Batch1_Mutual Information: {mutual_info1}")
+        print(f"Batch1_V-Measure: {v_measure1}")
+        print(f"Batch1_Adjusted Mutual Information (AMI): {ami1}")
+        print(f"Batch1_Normalized Mutual Information (NMI): {nmi1}")
+        print(f"Batch1_Adjusted Rand Index (ARI): {ari1}")
+        print(f"Batch2_Homogeneity: {homogeneity2}")
+        print(f"Batch2_Mutual Information: {mutual_info2}")
+        print(f"Batch2_V-Measure: {v_measure2}")
+        print(f"Batch2_Adjusted Mutual Information (AMI): {ami2}")
+        print(f"Batch2_Normalized Mutual Information (NMI): {nmi2}")
+        print(f"Batch2_Adjusted Rand Index (ARI): {ari2}")
+
+        # 创建结果字典
+        metrics_data = {
+            'Metric': [
+                'Homogeneity',
+                'Mutual Information',
+                'V-Measure',
+                'Adjusted Mutual Information (AMI)',
+                'Normalized Mutual Information (NMI)',
+                'Adjusted Rand Index (ARI)'
+            ],
+            'Batch1': [
+                homogeneity1,
+                mutual_info1,
+                v_measure1,
+                ami1,
+                nmi1,
+                ari1
+            ],
+            'Batch2': [
+                homogeneity2,
+                mutual_info2,
+                v_measure2,
+                ami2,
+                nmi2,
+                ari2
+            ]
+        }
+
+        # 转换为 DataFrame
+        df = pd.DataFrame(metrics_data)
+
+        # 保存到 CSV
+        output_path = os.path.join(umap_dir, "clustering_metrics.csv")
+        df.to_csv(output_path, index=False)
+        print('metrics saved in clustering_metrics.csv')

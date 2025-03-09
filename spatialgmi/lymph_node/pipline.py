@@ -296,7 +296,7 @@ if __name__ == "__main__":
     fig, axs = plt.subplots(2, 4, figsize=(22, 10))
     axs = axs.flatten()
 
-    # 原有绘图代码保持不变...
+
 
     # 在第一个子图添加文本标注
     text_content = [

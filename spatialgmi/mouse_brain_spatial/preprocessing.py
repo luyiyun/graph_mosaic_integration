@@ -1,3 +1,4 @@
+import os
 import scanpy as sc
 import anndata as ad
 import mudata as md
@@ -28,7 +29,30 @@ def check_celltypes(adata, obs_key):
 # 检查RNA数据
 print("RNA细胞类型分布 (cell_type1):")
 check_celltypes(rna, 'cell_type1')
+save_dir = "/root/graph_mosaic_integration/spatialgmi/mouse_brain_spatial/result/umap/test_for_plot"
+os.makedirs(save_dir, exist_ok=True)  # 确保目录存在
+sc.settings.figdir = save_dir
+# 绘制ZT4的空间分布
+sc.pl.embedding(
+    spatial_zt4,
+    basis="spatial",
+    color="cell_type",
+    title="ZT4 Spatial Cell Type Distribution",
+    frameon=False,
+    legend_loc="on data",  # 如果标签太多可以移除或调整位置
+    save="ZT4_1.png"
+)
 
+# 绘制ZT14的空间分布
+sc.pl.embedding(
+    spatial_zt14,
+    basis="spatial",
+    color="cell_type",
+    title="ZT14 Spatial Cell Type Distribution",
+    frameon=False,
+    legend_loc="on data",
+    save="ZT14_1.png"
+)
 # 检查ATAC数据
 print("\nATAC细胞类型分布 (cell_type):")
 check_celltypes(atac, 'cell_type')
@@ -121,6 +145,28 @@ atac = unify_celltypes(atac, 'ATAC')
 spatial_zt4 = unify_celltypes(spatial_zt4, 'SPATIAL')
 spatial_zt14 = unify_celltypes(spatial_zt14, 'SPATIAL')
 
+sc.pl.embedding(
+    spatial_zt4,
+    basis="spatial",
+    color="cell_type",
+    title="ZT4 Spatial Cell Type Distribution",
+    frameon=False,
+    legend_loc="on data",  # 如果标签太多可以移除或调整位置
+    save="ZT4_2.png"
+)
+
+# 绘制ZT14的空间分布
+sc.pl.embedding(
+    spatial_zt14,
+    basis="spatial",
+    color="cell_type",
+    title="ZT14 Spatial Cell Type Distribution",
+    frameon=False,
+    legend_loc="on data",
+    save="ZT14_2.png"
+)
+
+
 # 验证最终类型分布
 print("\n统一后的细胞类型分布:")
 print("RNA:", rna.obs['cell_type'].value_counts())
@@ -166,6 +212,11 @@ atac.var['chrom'] = atac.var['chrom']  # 如果列名是chromosome需要修改
 atac.var['start'] = atac.var['chromStart'].astype(int)
 atac.var['end'] = atac.var['chromEnd'].astype(int)
 
+
+rna.obs_names = "rna_" + rna.obs_names.astype(str)            # RNA 数据添加前缀
+spatial_zt4.obs_names = "spatial_zt4_" + spatial_zt4.obs_names.astype(str)  # ZT4 添加前缀
+spatial_zt14.obs_names = "spatial_zt14_" + spatial_zt14.obs_names.astype(str)  # ZT14 添加前缀
+
 # 添加 batch 信息
 rna.obs['batch'] = '3'  # rna 是 batch3
 atac.obs['batch'] = '1'  # rna 是 batch3
@@ -196,7 +247,26 @@ if 'spatial' in spatial_zt14.obsm:
 
 # 将空间坐标添加到 combined_rna 的 obsm 中
 combined_rna.obsm['spatial'] = spatial_coords
+sc.pl.embedding(
+    combined_rna[combined_rna.obs['batch'] == '1'],
+    basis="spatial",
+    color="cell_type",
+    title="ZT4 Spatial Cell Type Distribution",
+    frameon=False,
+    legend_loc="on data",  # 如果标签太多可以移除或调整位置
+    save="ZT4_3.png"
+)
 
+# 绘制ZT14的空间分布
+sc.pl.embedding(
+    combined_rna[combined_rna.obs['batch'] == '2'],
+    basis="spatial",
+    color="cell_type",
+    title="ZT14 Spatial Cell Type Distribution",
+    frameon=False,
+    legend_loc="on data",
+    save="ZT14_3.png"
+)
 #===========================================================================
 #变量筛选
 #===========================================================================
@@ -216,7 +286,26 @@ mdata = md.MuData({
 
 print(mdata)
 
+sc.pl.embedding(
+    mdata.mod['rna'][mdata.mod['rna'].obs['batch'] == '1'],
+    basis="spatial",
+    color="cell_type",
+    title="ZT4 Spatial Cell Type Distribution",
+    frameon=False,
+    legend_loc="on data",  # 如果标签太多可以移除或调整位置
+    save="ZT4_4.png"
+)
 
+# 绘制ZT14的空间分布
+sc.pl.embedding(
+    mdata.mod['rna'][mdata.mod['rna'].obs['batch'] == '2'],
+    basis="spatial",
+    color="cell_type",
+    title="ZT14 Spatial Cell Type Distribution",
+    frameon=False,
+    legend_loc="on data",
+    save="ZT14_4.png"
+)
 
 
 # 创建基因TSS区间（需要获取真实基因坐标）

@@ -183,62 +183,7 @@ class GraphMosaicIntegration:
             },
             index=indice,
         )
-        # # --- 如果启用空间信息 --- #
-        # if cls.use_spatial_distance:
-        #     # 确保每个细胞的空间坐标（x, y）已包含在 mdata.obs 中
-        #     if "x" not in mdata.obs or "y" not in mdata.obs:
-        #         raise ValueError("空间坐标 x 和 y 不存在于 mdata.obs 中")
 
-        #     # 获取细胞的空间坐标（x, y）
-        #     cell_coords = mdata.obs[["x", "y"]].values  # 获取所有细胞的空间坐标
-        #     print('--------Spatial information loaded--------')
-        #     # 计算细胞之间的欧几里得距离
-        #     distances = cdist(cell_coords, cell_coords)
-
-
-        #     # 根据距离阈值构建边，只有距离小于阈值的细胞才有边连接
-        #     adjacency_matrix = distances < cls.distance_threshold  # 阈值设定为 distance_threshold
-
-        #     # 获取满足条件的细胞对（row, col 是索引）
-        #     row, col = np.where(adjacency_matrix)
-
-        #     # 过滤掉对角线上的边（即一个细胞和它自己之间的边）
-        #     valid_edges = row != col
-        #     row, col = row[valid_edges], col[valid_edges]
-
-        #     # 使用指数衰减函数根据距离计算边的权重
-        #     if cls.weight_type =='exp':
-        #         weights = np.exp(-distances[row, col] / cls.sigma)*cls.weight_sigma
-
-        #     # if cls.weight_type == 'attention':
-        #     #     cls.attention_layer = AttentionLayer(input_dim=1, output_dim=1)  # 默认创建MLP网络
-        #     #     distance_values = distances[row, col].reshape(-1, 1)
-
-        #     #     #尝试计算相似性
-        #     #     from sklearn.metrics.pairwise import cosine_similarity
-        #     #     expression_matrix = mdata.mod['rna'].X  
-        #     #     cosine_sim = cosine_similarity(expression_matrix)
-        #     #     expression_similarity_values = (cosine_sim[row, col]+1)/2
-        #     #     similarity_values = expression_similarity_values.reshape(-1, 1)
-        #     #     # import ipdb;ipdb.set_trace()
-        #     #     distance_values= distance_values*similarity_values
-        #     #     print(distance_values)
-        #     #     # weights=distance_values*cls.sigma
-        #     #     weights = cls.attention_layer(torch.tensor(distance_values, dtype=torch.float32)).squeeze()
-        #     #     weights = weights.detach().numpy()*cls.sigma
-                
-        #     # 将空间驱动的边加入到 main_edges_df 中
-        #     # import ipdb;ipdb.set_trace()
-        #     spatial_edge_df = pd.DataFrame({
-        #         "src": row,
-        #         "dst": col,
-        #         "weight": weights,  # 可根据需求调整权重
-        #     })
-        # else:
-        #     spatial_edge_df = pd.DataFrame()  # 如果不使用空间信息，创建一个空的 DataFrame
-        # print(spatial_edge_df)
-
-        # get all edges
         main_edges_df = []
         for mod_name, adata_mod in mdata.mod.items():
             # 获取细胞和特征的全局索引
@@ -256,17 +201,6 @@ class GraphMosaicIntegration:
                 expression_matrix.data,
             )
 
-            # if isinstance(expression_matrix, csr_matrix):  # 稀疏矩阵
-            #     row_indices, col_indices = expression_matrix.nonzero()
-            #     expression_values = expression_matrix.data
-            # else:  # 稠密矩阵
-            #     expression_matrix = csr_matrix(expression_matrix)
-            #     row_indices, col_indices = expression_matrix.nonzero()
-            #     expression_values = expression_matrix.data
-
-            # row_indices = np.asarray(row_indices).flatten()
-            # col_indices = np.asarray(col_indices).flatten()
-            # expression_values = np.asarray(expression_values).flatten()
 
             # 将细胞和特征映射到全局索引表中的序列号
             mapped_batches = nodes_df.loc[cell_indices[row_indices], "idx"].values
@@ -284,10 +218,6 @@ class GraphMosaicIntegration:
         # --- 如果启用空间信息 --- #
         if spatial_keys is not None:
             assert len(spatial_keys) == 2, "spatial_keys must be a tuple of two keys"
-            # 确保每个细胞的空间坐标（x, y）已包含在 mdata.obs 中
-            # assert all(
-            #     k in mdata.obs for k in spatial_keys
-            # ), "spatial_keys must be in mdata.obs"
 
             for mod_name, adata_mod in mdata.mod.items():
                 if (
@@ -301,74 +231,53 @@ class GraphMosaicIntegration:
 
                 # 获取细胞和特征的全局索引
                 cell_indices = adata_mod.obs.index
-                feature_indices = adata_mod.var.index
-
-                # 获取细胞的空间坐标（x, y）
                 cell_coords = adata_mod.obs[spatial_keys].values
-                print(f"--------Spatial information loaded in {mod_name}--------")
-                # 计算细胞之间的欧几里得距离
-                distances = cdist(cell_coords, cell_coords)
-                print(distances)
-                # 根据距离阈值构建边，只有距离小于阈值的细胞才有边连接
-                adjacency_matrix = distances < spatial_threshold
-                print(adjacency_matrix)
-                # 获取满足条件的细胞对（row, col 是索引）
-                row, col = np.where(adjacency_matrix)
-                print(row, col)
-                # 过滤掉对角线上的边（即一个细胞和它自己之间的边）
-                valid_edges = row != col
-                row, col = row[valid_edges], col[valid_edges]
 
-                # 使用指数衰减函数根据距离计算边的权重
-                # if cls.weight_type == "exp":
-                print(spatial_sigma,spatial_alpha)
-                weights = spatial_alpha * np.exp(-distances[row, col] / spatial_sigma)
-                print(weights)
-                # 将细胞和特征映射到全局索引表中的序列号
-                mapped_batches = nodes_df.loc[cell_indices[row], "idx"].values
-                mapped_features = nodes_df.loc[cell_indices[col], "idx"].values
-                # 创建临时 DataFrame
-                edge_df = pd.DataFrame(
-                    {
-                        "src": mapped_batches,
-                        "dst": mapped_features,
-                        "weight": weights,
-                    }
-                )
-                print(edge_df)
-                main_edges_df.append(edge_df)
+                if batch_key is not None:
+                    batches = adata_mod.obs[batch_key]
+                    unique_batches = pd.unique(batches)
+                    for batch in unique_batches:
+                        batch_mask = (batches == batch)
+                        batch_cell_indices = cell_indices[batch_mask]
+                        if len(batch_cell_indices) == 0:
+                            continue
+                        batch_coords = cell_coords[batch_mask]
+                        distances = cdist(batch_coords, batch_coords)
+                        adjacency_matrix = distances < spatial_threshold
+                        row, col = np.where(adjacency_matrix)
+                        valid_edges = row != col
+                        row, col = row[valid_edges], col[valid_edges]
+                        if len(row) == 0:
+                            continue
+                        # 计算权重
+                        weights = spatial_alpha * np.exp(-distances[row, col] / spatial_sigma)
+                        # 转换为全局索引
+                        src_global = nodes_df.loc[batch_cell_indices[row], 'idx'].values
+                        dst_global = nodes_df.loc[batch_cell_indices[col], 'idx'].values
+                        edge_df = pd.DataFrame({
+                            'src': src_global,
+                            'dst': dst_global,
+                            'weight': weights
+                        })
+                        main_edges_df.append(edge_df)
+                else:
+                    distances = cdist(cell_coords, cell_coords)
+                    adjacency_matrix = distances < spatial_threshold
+                    row, col = np.where(adjacency_matrix)
+                    valid_edges = row != col
+                    row, col = row[valid_edges], col[valid_edges]
+                    if len(row) == 0:
+                        continue
+                    weights = spatial_alpha * np.exp(-distances[row, col] / spatial_sigma)
+                    src_global = nodes_df.loc[cell_indices[row], 'idx'].values
+                    dst_global = nodes_df.loc[cell_indices[col], 'idx'].values
+                    edge_df = pd.DataFrame({
+                        'src': src_global,
+                        'dst': dst_global,
+                        'weight': weights
+                    })
+                    main_edges_df.append(edge_df)
 
-            # if cls.weight_type == "attention":
-            #     cls.attention_layer = AttentionLayer(
-            #         input_dim=1, output_dim=1
-            #     )  # 默认创建MLP网络
-            #     distance_values = distances[row, col].reshape(-1, 1)
-            #
-            #     # 尝试计算相似性
-            #     from sklearn.metrics.pairwise import cosine_similarity
-            #
-            #     expression_matrix = mdata.mod["rna"].X
-            #     cosine_sim = cosine_similarity(expression_matrix)
-            #     expression_similarity_values = (cosine_sim[row, col] + 1) / 2
-            #     similarity_values = expression_similarity_values.reshape(-1, 1)
-            #     # import ipdb;ipdb.set_trace()
-            #     distance_values = distance_values * similarity_values
-            #     print(distance_values)
-            #     weights = cls.attention_layer(
-            #         torch.tensor(distance_values, dtype=torch.float32)
-            #     ).squeeze()
-            #     weights = weights.detach().numpy() * cls.sigma
-
-            # 将空间驱动的边加入到 main_edges_df 中
-            # import ipdb;ipdb.set_trace()
-            # spatial_edge_df = pd.DataFrame(
-            #     {
-            #         "src": row,
-            #         "dst": col,
-            #         "weight": weights,  # 可根据需求调整权重
-            #     }
-            # )
-            # main_edges_df.append(spatial_edge_df)
 
         main_edges_df = pd.concat(main_edges_df, ignore_index=True)
         main_edges = main_edges_df[["src", "dst"]].values
