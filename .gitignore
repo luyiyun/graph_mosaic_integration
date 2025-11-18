@@ -1,6 +1,7 @@
 .*
 !.gitignore
 !.python-version
+experiments/
 data/
 result/
 res/

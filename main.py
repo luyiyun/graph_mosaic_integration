@@ -53,7 +53,7 @@ for i in [0.04]:
         label_smoothing=label_smoothing,
         w_grad_rev=alpha,
         w_loss_cls=loss_alpha,
-        adversarial_training=True,
+        #adversarial_training=True,
         adversarial_batching_method="divide",
         val_split=0.1,
         patience=5,
