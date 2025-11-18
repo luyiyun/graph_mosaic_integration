@@ -109,14 +109,6 @@ class GraphMosaicIntegration:
             else:
                 self.weights[k] = getattr(self, k)
 
-    clu_loss_weight: float = 0.1
-    late_join_clu_weight: int = 100
-    use_spatial_distance: bool = True  # 添加开关参数
-    distance_threshold: float = 10  # 设定一个空间距离阈值
-    sigma: float = 0.0001  # 控制距离对边权重的影响
-    weight_sigma: float=1
-    weight_type: Literal["exp","attention"] = "exp" 
-    
     def fit(
         self,
         mdata: mu.MuData,
@@ -140,7 +132,7 @@ class GraphMosaicIntegration:
             feature_interaction_key=feature_interaction_key,
             spatial_threshold=spatial_threshold,
             spatial_sigma=spatial_sigma,
-            spatial_alpha=spatial_alpha
+            spatial_alpha=spatial_alpha,
         )
         self.fit_graph(self.graph)
 
@@ -231,6 +223,7 @@ class GraphMosaicIntegration:
 
                 # 获取细胞和特征的全局索引
                 cell_indices = adata_mod.obs.index
+                feature_indices = adata_mod.var.index
                 cell_coords = adata_mod.obs[spatial_keys].values
 
                 if batch_key is not None:
