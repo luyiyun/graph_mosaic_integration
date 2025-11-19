@@ -23,7 +23,7 @@ def plot_umap(mdata, result_dir, neg_sampling_mode="matched"):
 
     # 确保保存目录存在
     os.makedirs(result_dir, exist_ok=True)
-    embedding_path = os.path.join(result_dir, "final_embeddings_matched_add_feat.csv")
+    embedding_path = os.path.join(result_dir, "final_embeddings.csv")
     embeddings = pd.read_csv(embedding_path, index_col=0)
     # 将对齐后的嵌入加入到 mdata
     mdata.obsm["X_embeddings"] = embeddings.loc[mdata.obs.index].to_numpy()

@@ -1,15 +1,18 @@
 from dataclasses import dataclass, asdict
 from typing import Literal
+import os
 import os.path as osp
 import json
 
+import torch
+import torch.nn as nn
 import mudata as mu
 import pandas as pd
 import numpy as np
 from scipy.sparse import csr_matrix, coo_matrix
-
+from scipy.spatial.distance import cdist
 from .graph import MosaicDataGraph
-from .model import FullModel
+from .model import GMIModel
 from .trainer import Trainer
 
 
@@ -29,6 +32,24 @@ def log_transform_and_normalize(matrix: csr_matrix | np.ndarray) -> csr_matrix:
     return csr_matrix(matrix)
 
 
+class AttentionLayer(nn.Module):
+    def __init__(self, input_dim=1, output_dim=1):
+        super(AttentionLayer, self).__init__()
+        self.fc1 = nn.Linear(input_dim, 64)  # 第一层线性变换
+        self.fc2 = nn.Linear(64, 32)  # 第二层线性变换
+        self.fc3 = nn.Linear(32, output_dim)  # 输出层
+        self.relu = nn.ReLU()  # 激活函数
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.relu(x)
+        x = self.fc2(x)
+        x = self.relu(x)
+        x = self.fc3(x)
+        x = torch.sigmoid(x)  # 使用 Sigmoid 激活函数，输出概率
+        return x
+
+
 @dataclass
 class GraphMosaicIntegration:
     embedding_dim: int = 50
@@ -38,52 +59,94 @@ class GraphMosaicIntegration:
     learning_rate: float = 0.01
     num_neg_per_pos: int = 4
     num_epochs: int = 100
+    num_epochs_with_balanced_weights: int = 0
     batch_size: int = 131072
     val_split: float = 0.2  # 验证集比例
     # add_feature_net: bool = True
     neg_sample_in_batch: bool = False
     device: str = "cuda"
     optimizer: Literal["adam", "rmsprop"] = "adam"
-    adversarial_training: bool = True
-    adversarial_batching_method: Literal["unique", "divide", "random"] = (
-        "divide"
-    )
+    adversarial_batching_method: Literal["unique", "divide", "random"] = "divide"
+    adversartial_balance_weights: bool = False
     disc_node_num_per_batch: int = 200
-    label_smoothing: float = 0.1
-    alpha: float = 0.1
-    loss_alpha: float = 0.2
     neg_sampling_mode: Literal["full", "matched", "bipartitle"] = "matched"
-    loss_type: Literal["margin_ranking, weighted_softmax"] = "weighted_softmax"
-    late_join_loss_alpha: int = 5
-    late_join_alpha: int = 5
+    loss_type: Literal["margin_ranking", "weighted_softmax"] = "weighted_softmax"
     patience: int | float = 5  # inf or np.inf表示不使用早停
+    random_seed: int = 0
+    bilinear: bool = False
+    num_cluster: int | None = None
+    label_smoothing: float = 0.1
+    w_grad_rev: float = 0.1
+    w_loss_cls: float = 0.2
+    w_loss_clu: float = 0.1
+    w_infonce_temp: float = 1.0
+    w_clu_temp: float = 1.0
+    w_cov: float = 0.0
+    w_dist: float = 0.0
+    late_join_weights: dict[str, int] | None = None
+
+    def __post_init__(self):
+        self.late_join_weights = self.late_join_weights or {}
+
+        weight_names = [
+            "label_smoothing",
+            "w_grad_rev",
+            "w_loss_cls",
+            "w_loss_clu",
+            "w_infonce_temp",
+            "w_clu_temp",
+            "w_cov",
+            "w_dist",
+        ]
+        assert all(k in weight_names for k in self.late_join_weights)
+        self.weights = {}
+        for k in weight_names:
+            if k in self.late_join_weights:
+                n_epochs_zero = self.late_join_weights[k]
+                self.weights[k] = [0] * n_epochs_zero + [getattr(self, k)] * (
+                    self.num_epochs - n_epochs_zero
+                )
+            else:
+                self.weights[k] = getattr(self, k)
 
     def fit(
         self,
         mdata: mu.MuData,
         batch_key: str | None,
+        spatial_keys: tuple[str, str] | None = None,
         log_norm: bool = True,
         feature_interaction_key: str | None = None,
         result_key: str | None = None,
+        spatial_threshold: float = 0.5,
+        spatial_sigma: float = 1,
+        spatial_alpha: float = 1.0,
     ):
         if result_key is not None:
             raise NotImplementedError("result_key is not supported yet!")
 
-        graph = self.mdata2graph(
+        self.graph = self.mdata2graph(
             mdata,
             batch_key=batch_key,
+            spatial_keys=spatial_keys,
             log_norm=log_norm,
             feature_interaction_key=feature_interaction_key,
+            spatial_threshold=spatial_threshold,
+            spatial_sigma=spatial_sigma,
+            spatial_alpha=spatial_alpha,
         )
-        self.fit_graph(graph)
+        self.fit_graph(self.graph)
 
     @classmethod
     def mdata2graph(
         cls,
         mdata: mu.MuData,
         batch_key: str | None,
+        spatial_keys: tuple[str, str] | None = None,
         log_norm: bool = True,
         feature_interaction_key: str | None = None,
+        spatial_threshold: float = 0.5,
+        spatial_sigma: float = 1,
+        spatial_alpha: float = 1.0,
     ) -> MosaicDataGraph:
         # mdata -> graph
 
@@ -113,7 +176,6 @@ class GraphMosaicIntegration:
             index=indice,
         )
 
-        # get all edges
         main_edges_df = []
         for mod_name, adata_mod in mdata.mod.items():
             # 获取细胞和特征的全局索引
@@ -123,9 +185,7 @@ class GraphMosaicIntegration:
             # 获取表达矩阵
             expression_matrix = adata_mod.X
             if log_norm:
-                expression_matrix = log_transform_and_normalize(
-                    expression_matrix
-                )
+                expression_matrix = log_transform_and_normalize(expression_matrix)
             expression_matrix = coo_matrix(expression_matrix)
             row_indices, col_indices, expression_values = (
                 expression_matrix.row,
@@ -133,26 +193,10 @@ class GraphMosaicIntegration:
                 expression_matrix.data,
             )
 
-            # if isinstance(expression_matrix, csr_matrix):  # 稀疏矩阵
-            #     row_indices, col_indices = expression_matrix.nonzero()
-            #     expression_values = expression_matrix.data
-            # else:  # 稠密矩阵
-            #     expression_matrix = csr_matrix(expression_matrix)
-            #     row_indices, col_indices = expression_matrix.nonzero()
-            #     expression_values = expression_matrix.data
-
-            # row_indices = np.asarray(row_indices).flatten()
-            # col_indices = np.asarray(col_indices).flatten()
-            # expression_values = np.asarray(expression_values).flatten()
 
             # 将细胞和特征映射到全局索引表中的序列号
-            mapped_batches = nodes_df.loc[
-                cell_indices[row_indices], "idx"
-            ].values
-            mapped_features = nodes_df.loc[
-                feature_indices[col_indices], "idx"
-            ].values
-
+            mapped_batches = nodes_df.loc[cell_indices[row_indices], "idx"].values
+            mapped_features = nodes_df.loc[feature_indices[col_indices], "idx"].values
             # 创建临时 DataFrame
             edge_df = pd.DataFrame(
                 {
@@ -163,11 +207,74 @@ class GraphMosaicIntegration:
             )
             main_edges_df.append(edge_df)
 
+        # --- 如果启用空间信息 --- #
+        if spatial_keys is not None:
+            assert len(spatial_keys) == 2, "spatial_keys must be a tuple of two keys"
+
+            for mod_name, adata_mod in mdata.mod.items():
+                if (
+                    spatial_keys[0] not in adata_mod.obs
+                    or spatial_keys[1] not in adata_mod.obs
+                ):
+                    print(
+                        f"--------Spatial information not found in {mod_name}--------"
+                    )
+                    continue
+
+                # 获取细胞和特征的全局索引
+                cell_indices = adata_mod.obs.index
+                feature_indices = adata_mod.var.index
+                cell_coords = adata_mod.obs[spatial_keys].values
+
+                if batch_key is not None:
+                    batches = adata_mod.obs[batch_key]
+                    unique_batches = pd.unique(batches)
+                    for batch in unique_batches:
+                        batch_mask = (batches == batch)
+                        batch_cell_indices = cell_indices[batch_mask]
+                        if len(batch_cell_indices) == 0:
+                            continue
+                        batch_coords = cell_coords[batch_mask]
+                        distances = cdist(batch_coords, batch_coords)
+                        adjacency_matrix = distances < spatial_threshold
+                        row, col = np.where(adjacency_matrix)
+                        valid_edges = row != col
+                        row, col = row[valid_edges], col[valid_edges]
+                        if len(row) == 0:
+                            continue
+                        # 计算权重
+                        weights = spatial_alpha * np.exp(-distances[row, col] / spatial_sigma)
+                        # 转换为全局索引
+                        src_global = nodes_df.loc[batch_cell_indices[row], 'idx'].values
+                        dst_global = nodes_df.loc[batch_cell_indices[col], 'idx'].values
+                        edge_df = pd.DataFrame({
+                            'src': src_global,
+                            'dst': dst_global,
+                            'weight': weights
+                        })
+                        main_edges_df.append(edge_df)
+                else:
+                    distances = cdist(cell_coords, cell_coords)
+                    adjacency_matrix = distances < spatial_threshold
+                    row, col = np.where(adjacency_matrix)
+                    valid_edges = row != col
+                    row, col = row[valid_edges], col[valid_edges]
+                    if len(row) == 0:
+                        continue
+                    weights = spatial_alpha * np.exp(-distances[row, col] / spatial_sigma)
+                    src_global = nodes_df.loc[cell_indices[row], 'idx'].values
+                    dst_global = nodes_df.loc[cell_indices[col], 'idx'].values
+                    edge_df = pd.DataFrame({
+                        'src': src_global,
+                        'dst': dst_global,
+                        'weight': weights
+                    })
+                    main_edges_df.append(edge_df)
+
+
         main_edges_df = pd.concat(main_edges_df, ignore_index=True)
         main_edges = main_edges_df[["src", "dst"]].values
-        main_edges_group = np.unique(
-            nodes_df["group"].values[main_edges], axis=0
-        )
+        main_edges_group = np.unique(nodes_df["group"].values[main_edges], axis=0)
 
         if feature_interaction_key is not None:
             net = mdata.varp[feature_interaction_key]
@@ -188,14 +295,12 @@ class GraphMosaicIntegration:
                 }
             )
             feat_edges = feat_edges_df[["src", "dst"]].values
-            feat_edges_group = np.unique(
-                nodes_df["group"].values[feat_edges], axis=0
-            )
+            feat_edges_group = np.unique(nodes_df["group"].values[feat_edges], axis=0)
         else:
             feat_edges_df, feat_edges_group = None, None
         return MosaicDataGraph(
-            n_nodes=nodes_df.shape[0],
-            n_edges=nodes_df.shape[0],
+            # n_nodes=nodes_df.shape[0],
+            # n_edges=nodes_df.shape[0],
             n_cells=mdata.shape[0],
             n_feats=mdata.shape[1],
             n_batch=mdata.obs[batch_key].unique().shape[0],
@@ -203,18 +308,27 @@ class GraphMosaicIntegration:
             nodes_df=nodes_df,
             main_edges_df=main_edges_df,
             feat_edges_df=feat_edges_df,
-            edge_groups=main_edges_group,
+            main_edge_groups=main_edges_group,
             feat_edge_groups=feat_edges_group,
         )
 
     def fit_graph(self, graph: MosaicDataGraph):
-        self.model = FullModel(
+        self.model = GMIModel(
             num_nodes=graph.n_nodes,
             embedding_dim=self.embedding_dim,
-            num_batch=graph.n_batch,
-            hidden_dims=self.disc_hiddens,
+            disc_hidden_dims=self.disc_hiddens,
+            # num_batch=graph.n_batch,
             bn=self.disc_bn,
+            bilinear=self.bilinear,
+            num_cells=graph.n_cells,
+            num_cluster=self.num_cluster,
+            cell_batch_ids=torch.tensor(
+                graph.nodes_df["group"].values[: graph.n_cells],
+                device=self.device,
+                dtype=torch.long,
+            ),
             add_batch_embedding=self.add_batch_embedding,
+            loss_type=self.loss_type,
         )
 
         # 初始化训练器
@@ -224,19 +338,18 @@ class GraphMosaicIntegration:
             optimizer=self.optimizer,
             lr=self.learning_rate,
             neg_sample_in_batch=self.neg_sample_in_batch,
-            adversarial_training=self.adversarial_training,
             adversarial_batching_method=self.adversarial_batching_method,
-            adversarial_with_feature_nodes=False,
             batch_size=self.batch_size,
             disc_node_num_per_batch=self.disc_node_num_per_batch,
-            label_smoothing=self.label_smoothing,
-            alpha=self.alpha,
-            loss_alpha=self.loss_alpha,
             neg_sampling_mode=self.neg_sampling_mode,
             loss_type=self.loss_type,
-            late_join_alpha=self.late_join_alpha,
-            late_join_loss_alpha=self.late_join_loss_alpha,
             patience=self.patience,
+            random_seed=self.random_seed,
+            # label_smoothing=self.label_smoothing,
+            # grad_reverse_weight=alpha,
+            # cls_loss_weight=loss_alpha,
+            # clu_loss_weight=loss_clu_weight,
+            # clu_loss_temp=loss_clu_temp,
         )
 
         self.trainer.train(
@@ -244,10 +357,62 @@ class GraphMosaicIntegration:
             num_neg_per_pos=self.num_neg_per_pos,
             num_epochs=self.num_epochs,
             val_split=self.val_split,
+            disc_with_feature_nodes=False,
+            **self.weights,
         )
 
+        if not self.adversartial_balance_weights:
+            return
+
+        # # 训练 adversarial_training 后，再训练一次，使用平衡的权重
+        # print("Estimate balance weights...")
+        # balanced_weights = self.trainer.estimate_balance_weights()
+        # graph.nodes_adversarial_weights = balanced_weights
+        # # 重新构建新的训练流程
+        # print("Retrain with balanced weights...")
+        # self.trainer_balanced = Trainer(
+        #     model=self.model,
+        #     device=self.device,
+        #     optimizer=self.optimizer,
+        #     lr=self.learning_rate * 0.1,
+        #     neg_sample_in_batch=self.neg_sample_in_batch,
+        #     adversarial_training=self.adversarial_training,
+        #     adversarial_batching_method=self.adversarial_batching_method,
+        #     adversarial_with_feature_nodes=False,
+        #     batch_size=self.batch_size,
+        #     disc_node_num_per_batch=self.disc_node_num_per_batch,
+        #     label_smoothing=self.label_smoothing,
+        #     alpha=self.w_grad_rev,
+        #     loss_alpha=self.w_loss_cls,
+        #     neg_sampling_mode=self.neg_sampling_mode,
+        #     loss_type=self.loss_type,
+        #     late_join_alpha=0,
+        #     late_join_loss_alpha=0,
+        #     patience=self.patience,
+        #     random_seed=self.random_seed,
+        #     std_loss_alpha=self.std_loss_alpha,
+        # )
+        # self.trainer_balanced.train(
+        #     graph=graph,
+        #     num_neg_per_pos=self.num_neg_per_pos,
+        #     num_epochs=self.num_epochs_with_balanced_weights,
+        #     val_split=self.val_split,
+        # )
+
     def save(self, path: str):
-        self.trainer.save(path)
+        os.makedirs(path, exist_ok=True)
+
+        model_path = os.path.join(path, "model.pth")
+        torch.save(self.model.state_dict(), model_path)
+
+        embed_df = pd.DataFrame(
+            self.model.node_embedding.weight.detach().cpu().numpy(),
+            index=self.graph.nodes_df.index,
+        )
+        embed_df.to_csv(osp.join(path, "final_embeddings.csv"))
+
+        self.trainer.all_losses.to_csv(os.path.join(path, "all_losses.csv"))
+
         args = asdict(self)
         with open(osp.join(path, "args.json"), "w") as f:
             json.dump(args, f)
