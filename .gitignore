@@ -3,6 +3,7 @@
 !.python-version
 ablation/
 AD/
+experiments/
 batch_comparison/
 Liger/
 lung/
