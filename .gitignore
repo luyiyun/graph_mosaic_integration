@@ -9,7 +9,8 @@ harmony_bmmc.py
 scmomat*.py
 MOP/
 Muto/
-trip/
+harmony*.py
+glue*.py
 copy.sh
 deprecated/
 batch_comparison/
