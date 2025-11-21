@@ -28,27 +28,27 @@ gen_atac <- function(frag_path, cells = NULL, min_cells = 5) {
   print('===============================================')
   print('frags_import_create_fragments')
   print('===============================================')
-  # 设置窗口大小和基因组
-  window_size <- 500 # 每个窗口500bp
-  genome_size <- 2.7e9 # 根据参考基因组设置大小
+
+  window_size <- 500 
+  genome_size <- 2.7e9 
   
-  # 加载基因组长度信息
+
   library(GenomeInfoDb)
   library(BSgenome.Hsapiens.UCSC.hg38)
   seqlengths <- seqlengths(BSgenome.Hsapiens.UCSC.hg38)
   print('===============================================')
   print('create seqlength')
   print('===============================================')
-  # 生成固定宽度的bins
+
   bins <- tileGenome(
-    seqlengths = seqlengths,            # 使用hg38染色体长度信息
-    tilewidth = window_size,            # 每个窗口500bp
-    cut.last.tile.in.chrom = TRUE        # 确保窗口不越界
+    seqlengths = seqlengths,            
+    tilewidth = window_size,            
+    cut.last.tile.in.chrom = TRUE        
   )
   print('===============================================')
   print('create bin')
   print('===============================================')
-  # 创建Peak矩阵
+
   atac_counts <- FeatureMatrix(
     fragments = frags,
     features = bins,
@@ -58,14 +58,14 @@ gen_atac <- function(frag_path, cells = NULL, min_cells = 5) {
   print('===============================================')
   print('create peak')
   print('===============================================')
-  # 获取基因注释信息
+
   annotation <- GetGRangesFromEnsDb(ensdb = EnsDb.Hsapiens.v86)
   seqlevelsStyle(annotation) <- "UCSC"
   genome(annotation) <- "hg38"
   print('===============================================')
   print('gene annotation')
   print('===============================================')
-  # 创建ChromatinAssay并添加注释
+
   atac_assay <- CreateChromatinAssay(
     counts = atac_counts,
     min.cells = min_cells,
@@ -76,13 +76,13 @@ gen_atac <- function(frag_path, cells = NULL, min_cells = 5) {
   print('===============================================')
   print('create chromatinAssay')
   print('===============================================')
-  # 创建Seurat对象
+
   atac <- CreateSeuratObject(
     counts = atac_assay,
     assay = 'atac'
   )
   
-  # 计算QC指标
+
   atac <- NucleosomeSignal(atac)
   atac <- TSSEnrichment(atac)
   

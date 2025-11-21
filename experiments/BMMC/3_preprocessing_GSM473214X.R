@@ -10,7 +10,7 @@ required_packages <- c(
 
 
 
-# 检查缺失包并安装
+
 missing_packages <- required_packages[!(required_packages %in% installed.packages()[,"Package"])]
 if(length(missing_packages)) install.packages(missing_packages)
 
@@ -32,7 +32,7 @@ remotes::install_github("r-lib/ymlthis")
 # BiocManager::install("BSgenome.Hsapiens.UCSC.hg38")
 library(GenomeInfoDb)
 library(BSgenome.Hsapiens.UCSC.hg38)
-# 加载所有包
+
 lapply(required_packages, library, character.only = TRUE)
 #===================================package===========================
 library(argparse)
@@ -47,7 +47,7 @@ source("/home/yuyipei/graph_mosaic_integration/experiments/BMMC/utils.R")
 #===================================package===========================
 
 #=================================file path============================
-# 设定路径
+
 frag_path <- file.path("/data/share_data/yuytest/gmi_data/unprocessed", "GSM4732140_Human_BoneMarrow_hg38_fragments.tsv.gz")
 adt_path <- file.path("/data/share_data/yuytest/gmi_data/unprocessed", "GSM4732141_Human_BoneMarrow_ADT.tsv.gz")
 hto_path <- file.path("/data/share_data/yuytest/gmi_data/unprocessed", "GSM4732142_Human_BoneMarrow_HTO.tsv.gz")
@@ -114,13 +114,13 @@ write.csv(matrix_data, file = "/data/share_data/yuytest/gmi_data/unprocessed/bm1
 
 
 # ==================================atac saveing==================================
-# 提取细胞信息
+
 cell_info_atac <- rownames(atac@meta.data)
 write.csv(cell_info_atac, file = "/data/share_data/yuytest/gmi_data/unprocessed/bm1_atac_cell_info.csv", row.names = FALSE)
-# 提取特征信息
+
 feature_info_atac <- rownames(atac@assays$atac)
 write.csv(feature_info_atac, file = "/data/share_data/yuytest/gmi_data/unprocessed/bm1_atac_feature_info.csv", row.names = FALSE)
-# 稀疏矩阵
+
 Matrix::writeMM(atac@assays$atac@data, file = "/data/share_data/yuytest/gmi_data/unprocessed/bm1_atac_data_matrix.mtx")
 
 # ==================================atac saveing==================================

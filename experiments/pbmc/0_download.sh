@@ -4,7 +4,7 @@ save_dir="./data"
 mkdir -p $save_dir
 
 files=("genes.txt" "proteins.txt" "regions.txt" "GxR.npz")
-# 使用循环迭代，添加元素到数组
+
 for ((i = 1; i < 3; i++)); do
   files+=("GxC$i.npz")
 done

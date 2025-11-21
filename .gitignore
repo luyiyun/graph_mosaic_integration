@@ -8,7 +8,7 @@ harmony_bmmc.py
 *bench.py
 scmomat*.py
 MOP/
-Muto/
+
 harmony*.py
 glue*.py
 copy.sh
