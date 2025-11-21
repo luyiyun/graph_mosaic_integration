@@ -3,7 +3,10 @@
 !.python-version
 ablation/
 AD/
-BMMC/
+glue_BMMC.py
+harmony_bmmc.py
+*bench.py
+scmomat*.py
 MOP/
 Muto/
 trip/
